@@ -1,0 +1,2 @@
+Selector de producto cuando un producto no tiene codigo de barra
+Agregar negocios particulares cuando no se compre en supermercado

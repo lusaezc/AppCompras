@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Compras Inteligentes">
+  <rect width="512" height="512" rx="110" fill="#0f766e"/>
+  <rect x="70" y="110" width="372" height="292" rx="50" fill="#ffffff" opacity="0.14"/>
+  <path d="M152 170h208a20 20 0 0 1 20 20v132a40 40 0 0 1-40 40H172a40 40 0 0 1-40-40V190a20 20 0 0 1 20-20z" fill="#ffffff"/>
+  <path d="M184 200h144a20 20 0 0 1 20 20v60a20 20 0 0 1-20 20H184a20 20 0 0 1-20-20v-60a20 20 0 0 1 20-20z" fill="#0f766e" opacity="0.12"/>
+  <circle cx="190" cy="330" r="24" fill="#0f766e"/>
+  <circle cx="322" cy="330" r="24" fill="#0f766e"/>
+  <path d="M236 220h96" stroke="#0f766e" stroke-width="16" stroke-linecap="round"/>
+  <path d="M236 254h64" stroke="#0f766e" stroke-width="16" stroke-linecap="round"/>
+</svg>
