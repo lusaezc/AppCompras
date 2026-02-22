@@ -1,4 +1,4 @@
-import { Router } from "express";
+﻿import { Router } from "express";
 import { poolPromise } from "../db";
 
 type LoginBody = {
@@ -32,7 +32,7 @@ router.post("/login", async (req, res) => {
           FechaRegistro,
           NivelConfianza,
           Activo
-        FROM [ProductScannerDB].[dbo].[Usuario]
+        FROM [dbo].[Usuario]
         WHERE [usuario] = @usuario
           AND [contraseña] = @contrasena
           AND Activo = 1
@@ -59,3 +59,4 @@ router.post("/login", async (req, res) => {
 });
 
 export default router;
+

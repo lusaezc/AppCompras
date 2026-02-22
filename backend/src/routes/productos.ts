@@ -1,4 +1,4 @@
-import { Router, Request, Response } from "express";
+﻿import { Router, Request, Response } from "express";
 import sql from "mssql";
 import { poolPromise } from "../db";
 
@@ -17,7 +17,7 @@ router.get("/", async (_req: Request, res: Response) => {
         Categoria,
         Imagen,
         Activo
-      FROM [ProductScannerDB].[dbo].[Producto]
+      FROM [dbo].[Producto]
       WHERE Activo = 1
       ORDER BY NombreProducto ASC
     `);
@@ -73,7 +73,7 @@ router.get("/codigo/:code", async (req: Request, res: Response) => {
           Categoria,
           Imagen,
           Activo
-        FROM [ProductScannerDB].[dbo].[Producto]
+        FROM [dbo].[Producto]
         WHERE CodigoBarra = @CodigoBarra
       `);
 
@@ -136,10 +136,10 @@ router.get("/:id/historial-precios", async (req: Request, res: Response) => {
           rp.EsValido,
           s.NombreSucursal,
           u.Nombre AS NombreUsuario
-        FROM [ProductScannerDB].[dbo].[RegistroPrecio] rp
-        LEFT JOIN [ProductScannerDB].[dbo].[Sucursal] s
+        FROM [dbo].[RegistroPrecio] rp
+        LEFT JOIN [dbo].[Sucursal] s
           ON s.SucursalId = rp.SucursalId
-        LEFT JOIN [ProductScannerDB].[dbo].[Usuario] u
+        LEFT JOIN [dbo].[Usuario] u
           ON u.UserId = rp.UserId
         WHERE rp.ProductoId = @ProductoId
         ORDER BY rp.FechaRegistro DESC, rp.RegistroPrecioId DESC
@@ -216,7 +216,7 @@ router.put("/:id", async (req: Request, res: Response) => {
       .input("Categoria", sql.NVarChar(100), categoria)
       .input("Imagen", sql.VarBinary(sql.MAX), imagenBuffer)
       .query(`
-        UPDATE [ProductScannerDB].[dbo].[Producto]
+        UPDATE [dbo].[Producto]
         SET
           CodigoBarra = @CodigoBarra,
           NombreProducto = @NombreProducto,
@@ -273,7 +273,7 @@ router.delete("/:id", async (req: Request, res: Response) => {
       .request()
       .input("ProductoId", sql.Int, productoId)
       .query(`
-        DELETE FROM [ProductScannerDB].[dbo].[Producto]
+        DELETE FROM [dbo].[Producto]
         WHERE ProductoId = @ProductoId
       `);
 
@@ -379,3 +379,4 @@ router.post("/", async (req: Request, res: Response) => {
 });
 
 export default router;
+

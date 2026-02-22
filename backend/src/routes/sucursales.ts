@@ -1,4 +1,4 @@
-import { Router } from "express";
+﻿import { Router } from "express";
 import sql from "mssql";
 import { poolPromise } from "../db";
 
@@ -38,7 +38,7 @@ router.get("/", async (req, res) => {
           Latitud,
           Longitud,
           Activo
-        FROM [ProductScannerDB].[dbo].[Sucursal]
+        FROM [dbo].[Sucursal]
         WHERE Activo = 1 AND SupermercadoId = @SupermercadoId
         ORDER BY NombreSucursal ASC
       `);
@@ -57,3 +57,4 @@ router.get("/", async (req, res) => {
 });
 
 export default router;
+

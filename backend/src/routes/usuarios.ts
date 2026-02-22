@@ -1,4 +1,4 @@
-import { Router } from "express";
+﻿import { Router } from "express";
 import { poolPromise } from "../db";
 
 const router = Router();
@@ -15,7 +15,7 @@ router.get("/", async (_req, res) => {
         FechaRegistro,
         NivelConfianza,
         Activo
-      FROM [ProductScannerDB].[dbo].[Usuario]
+      FROM [dbo].[Usuario]
       WHERE Activo = 1
       ORDER BY Nombre ASC
     `);
@@ -52,7 +52,7 @@ router.get("/:id", async (req, res) => {
         FechaRegistro,
         NivelConfianza,
         Activo
-      FROM [ProductScannerDB].[dbo].[Usuario]
+      FROM [dbo].[Usuario]
       WHERE UserId = @userId
     `);
 
@@ -77,3 +77,4 @@ router.get("/:id", async (req, res) => {
 });
 
 export default router;
+

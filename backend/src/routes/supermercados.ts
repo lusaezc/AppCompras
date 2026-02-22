@@ -1,4 +1,4 @@
-import { Router, Request, Response } from "express";
+﻿import { Router, Request, Response } from "express";
 import sql from "mssql";
 import { poolPromise } from "../db";
 
@@ -15,7 +15,7 @@ router.get("/", async (_req: Request, res: Response) => {
         Logo,
         Pais,
         Activo
-      FROM [ProductScannerDB].[dbo].[Supermercado]
+      FROM [dbo].[Supermercado]
       WHERE Activo = 1
       ORDER BY Nombre ASC
     `);
@@ -74,7 +74,7 @@ router.get("/:id/ubicacion", async (req: Request, res: Response) => {
           s.Logo,
           s.Pais
           ${coordSelect}
-        FROM [ProductScannerDB].[dbo].[Supermercado] s
+        FROM [dbo].[Supermercado] s
         WHERE s.SupermercadoId = @SupermercadoId
       `);
 
@@ -96,7 +96,7 @@ router.get("/:id/ubicacion", async (req: Request, res: Response) => {
           Region,
           CAST(Latitud AS float) AS Latitud,
           CAST(Longitud AS float) AS Longitud
-        FROM [ProductScannerDB].[dbo].[Sucursal]
+        FROM [dbo].[Sucursal]
         WHERE SupermercadoId = @SupermercadoId
           AND Activo = 1
         ORDER BY NombreSucursal ASC
@@ -200,10 +200,10 @@ router.get("/:id/productos-precios", async (req: Request, res: Response) => {
               PARTITION BY rp.ProductoId
               ORDER BY rp.FechaRegistro DESC, rp.RegistroPrecioId DESC
             ) AS RN
-          FROM [ProductScannerDB].[dbo].[RegistroPrecio] rp
-          INNER JOIN [ProductScannerDB].[dbo].[Sucursal] s
+          FROM [dbo].[RegistroPrecio] rp
+          INNER JOIN [dbo].[Sucursal] s
             ON s.SucursalId = rp.SucursalId
-          INNER JOIN [ProductScannerDB].[dbo].[Producto] p
+          INNER JOIN [dbo].[Producto] p
             ON p.ProductoId = rp.ProductoId
           WHERE s.SupermercadoId = @SupermercadoId
             AND rp.EsValido = 1
@@ -248,3 +248,4 @@ router.get("/:id/productos-precios", async (req: Request, res: Response) => {
 });
 
 export default router;
+

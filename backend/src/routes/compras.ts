@@ -1,4 +1,4 @@
-import { Router, Request, Response } from "express";
+﻿import { Router, Request, Response } from "express";
 import sql from "mssql";
 import { poolPromise } from "../db";
 
@@ -31,12 +31,12 @@ router.get("/user/:userId", async (req: Request, res: Response) => {
         s.NombreSucursal,
         sup.Nombre AS NombreSupermercado,
         COUNT(dc.DetalleCompraId) AS TotalItems
-      FROM [ProductScannerDB].[dbo].[CompraUsuario] cu
-      LEFT JOIN [ProductScannerDB].[dbo].[Sucursal] s
+      FROM [dbo].[CompraUsuario] cu
+      LEFT JOIN [dbo].[Sucursal] s
         ON s.SucursalId = cu.SucursalId
-      LEFT JOIN [ProductScannerDB].[dbo].[Supermercado] sup
+      LEFT JOIN [dbo].[Supermercado] sup
         ON sup.SupermercadoId = s.SupermercadoId
-      LEFT JOIN [ProductScannerDB].[dbo].[DetalleCompra] dc
+      LEFT JOIN [dbo].[DetalleCompra] dc
         ON dc.CompraId = cu.CompraId
       WHERE cu.UserId = @UserId
       GROUP BY
@@ -88,8 +88,8 @@ router.get("/:compraId/items", async (req: Request, res: Response) => {
           p.Marca,
           p.Categoria,
           p.Imagen
-        FROM [ProductScannerDB].[dbo].[DetalleCompra] dc
-        LEFT JOIN [ProductScannerDB].[dbo].[Producto] p
+        FROM [dbo].[DetalleCompra] dc
+        LEFT JOIN [dbo].[Producto] p
           ON p.ProductoId = dc.ProductoId
         WHERE dc.CompraId = @CompraId
         ORDER BY dc.DetalleCompraId ASC
@@ -161,7 +161,7 @@ router.post("/", async (req: Request, res: Response) => {
         .input("TotalCompra", sql.Decimal(18, 2), total)
         .input("SucursalId", sql.Int, SucursalId)
         .query(`
-          INSERT INTO [ProductScannerDB].[dbo].[CompraUsuario]
+          INSERT INTO [dbo].[CompraUsuario]
             (UserId, FechaCompra, TotalCompra, SucursalId)
           OUTPUT INSERTED.CompraId
           VALUES
@@ -185,7 +185,7 @@ router.post("/", async (req: Request, res: Response) => {
           .input("Cantidad", sql.Int, item.Cantidad)
           .input("Subtotal", sql.Decimal(18, 2), subtotal)
           .query(`
-            INSERT INTO [ProductScannerDB].[dbo].[DetalleCompra]
+            INSERT INTO [dbo].[DetalleCompra]
               (CompraId, ProductoId, PrecioUnitario, Cantidad, Subtotal)
             VALUES
               (@CompraId, @ProductoId, @PrecioUnitario, @Cantidad, @Subtotal)
@@ -199,7 +199,7 @@ router.post("/", async (req: Request, res: Response) => {
           .input("UserId", sql.Int, UserId)
           .input("EsValido", sql.Bit, true)
           .query(`
-            INSERT INTO [ProductScannerDB].[dbo].[RegistroPrecio]
+            INSERT INTO [dbo].[RegistroPrecio]
               (ProductoId, SucursalId, Precio, FechaRegistro, UserId, EsValido)
             VALUES
               (@ProductoId, @SucursalId, @Precio, @FechaRegistro, @UserId, @EsValido)
@@ -226,3 +226,4 @@ router.post("/", async (req: Request, res: Response) => {
 });
 
 export default router;
+
