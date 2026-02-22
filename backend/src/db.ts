@@ -6,8 +6,8 @@ const config: sql.config = {
   user: process.env.DB_USER as string,
   password: process.env.DB_PASSWORD as string,
   options: {
-    encrypt: false,
-    trustServerCertificate: true,
+    encrypt: true,
+    trustServerCertificate: false,
   },
 };
 

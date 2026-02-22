@@ -34,8 +34,8 @@ app.use((err: Error & { type?: string }, req: Request, res: Response, next: Next
   }
   next(err);
 });
-const PORT = 3001;
+const PORT = Number(process.env.PORT) || 3001;
 const HOST = "0.0.0.0";
 app.listen(PORT, HOST, () => {
-  console.log(`🚀 API corriendo en http://localhost:${PORT}`);
+  console.log(`🚀 API corriendo en puerto ${PORT}`);
 });
