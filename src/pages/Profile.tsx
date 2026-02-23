@@ -3,7 +3,8 @@ import { motion } from "framer-motion";
 import { Star } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import ScreenWrapper from "../components/ScreenWrapper";
-import { clearAuthUser, readAuthUser, type AuthUser } from "../auth";
+import { clearAuthUser, readAuthUser, saveAuthUser, type AuthUser } from "../auth";
+import { applyTheme, persistTheme, readSavedTheme } from "../theme";
 
 type ProfileSettings = {
   displayName: string;
@@ -12,6 +13,9 @@ type ProfileSettings = {
   profilePublic: boolean;
   darkTheme: boolean;
 };
+
+const isLiderFlag = (value: unknown) =>
+  value === true || value === 1 || value === "1" || value === "true";
 
 const defaultSettings: ProfileSettings = {
   displayName: "",
@@ -32,6 +36,8 @@ export default function Profile() {
   const [avatarSrc, setAvatarSrc] = useState(
     "https://i.pravatar.cc/150?u=guest",
   );
+
+  const isLider = isLiderFlag(user?.lider);
 
   const avatarCandidates = useMemo(() => {
     if (!user?.UserId) return ["https://i.pravatar.cc/150?u=guest"];
@@ -82,7 +88,12 @@ export default function Profile() {
         }
 
         if (active) {
-          setUser(payload.data);
+          const normalizedUser = {
+            ...payload.data,
+            lider: isLiderFlag(payload.data.lider),
+          };
+          setUser(normalizedUser);
+          saveAuthUser(normalizedUser);
         }
       } catch (loadError) {
         if (!active) return;
@@ -114,24 +125,29 @@ export default function Profile() {
     if (raw) {
       try {
         const parsed = JSON.parse(raw) as Partial<ProfileSettings>;
+        const darkTheme = parsed.darkTheme ?? readSavedTheme(user.UserId);
         setSettings({
           displayName: parsed.displayName ?? user.Nombre ?? "",
           email: parsed.email ?? user.Email ?? "",
           notifications: parsed.notifications ?? true,
           profilePublic: parsed.profilePublic ?? false,
-          darkTheme: parsed.darkTheme ?? false,
+          darkTheme,
         });
+        applyTheme(darkTheme);
         return;
       } catch {
         // Ignora datos corruptos.
       }
     }
 
+    const darkTheme = readSavedTheme(user.UserId);
     setSettings({
       ...defaultSettings,
       displayName: user.Nombre ?? "",
       email: user.Email ?? "",
+      darkTheme,
     });
+    applyTheme(darkTheme);
   }, [user]);
 
   const memberSince = useMemo(() => {
@@ -194,6 +210,14 @@ export default function Profile() {
             }}
           />
           <div className="profile-hero-content">
+            <span
+              className={[
+                "profile-role-badge",
+                isLider ? "is-lider" : "is-user",
+              ].join(" ")}
+            >
+              {isLider ? "Administrador" : "Usuario"}
+            </span>
             <h2>{user?.Nombre ?? "Perfil de usuario"}</h2>
             <p>{user?.Email ?? "Sin email registrado"}</p>
           </div>
@@ -298,15 +322,28 @@ export default function Profile() {
             <input
               type="checkbox"
               checked={settings.darkTheme}
-              onChange={(e) =>
+              onChange={(e) => {
+                const checked = e.target.checked;
                 setSettings((prev) => ({
                   ...prev,
-                  darkTheme: e.target.checked,
-                }))
-              }
+                  darkTheme: checked,
+                }));
+                applyTheme(checked);
+                persistTheme(checked, user?.UserId);
+              }}
             />
           </label>
         </section>
+
+        {isLider && (
+          <button
+            type="button"
+            className="profile-manage-users-btn"
+            onClick={() => navigate("/lider/usuarios")}
+          >
+            Gestionar usuarios
+          </button>
+        )}
 
         <button
           type="button"

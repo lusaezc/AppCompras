@@ -1,0 +1,5 @@
+Nombre del servidor: appcompras-sql-0391.database.windows.net
+
+Administrador del servidor: sqladmin
+
+Contraseña:Ls039114044012

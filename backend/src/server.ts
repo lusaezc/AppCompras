@@ -10,6 +10,7 @@ import usuariosRoutes from "./routes/usuarios";
 import sucursalesRoutes from "./routes/sucursales";
 import comprasRoutes from "./routes/compras";
 import authRoutes from "./routes/auth";
+import preciosRoutes from "./routes/precios";
 
 const app = express();
 app.use(cors());
@@ -24,6 +25,7 @@ app.use("/api/supermercados", supermercadosRoutes);
 app.use("/api/usuarios", usuariosRoutes);
 app.use("/api/sucursales", sucursalesRoutes);
 app.use("/api/compras", comprasRoutes);
+app.use("/api/precios", preciosRoutes);
 
 app.use((err: Error & { type?: string }, req: Request, res: Response, next: NextFunction) => {
   if (err?.type === "entity.too.large") {

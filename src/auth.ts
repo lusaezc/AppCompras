@@ -5,9 +5,13 @@ export type AuthUser = {
   FechaRegistro?: string | null;
   NivelConfianza?: number | null;
   Activo?: boolean;
+  lider?: boolean;
 };
 
 const AUTH_KEY = "auth_user";
+
+const toBoolFlag = (value: unknown): boolean =>
+  value === true || value === 1 || value === "1" || value === "true";
 
 export const readAuthUser = (): AuthUser | null => {
   const raw = localStorage.getItem(AUTH_KEY);
@@ -23,6 +27,7 @@ export const readAuthUser = (): AuthUser | null => {
       FechaRegistro: parsed.FechaRegistro ?? null,
       NivelConfianza: parsed.NivelConfianza ?? 0,
       Activo: parsed.Activo ?? true,
+      lider: toBoolFlag(parsed.lider),
     };
   } catch {
     return null;

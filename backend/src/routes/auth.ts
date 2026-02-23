@@ -8,6 +8,27 @@ type LoginBody = {
 
 const router = Router();
 
+const getRoleColumn = async () => {
+  const pool = await poolPromise;
+  const result = await pool.request().query(`
+    SELECT
+      CASE
+        WHEN COL_LENGTH('dbo.Usuario', 'lider') IS NOT NULL THEN 'lider'
+        WHEN COL_LENGTH('dbo.Usuario', 'admin') IS NOT NULL THEN 'admin'
+        ELSE NULL
+      END AS RoleColumn
+  `);
+
+  const roleColumn = result.recordset?.[0]?.RoleColumn as
+    | string
+    | null
+    | undefined;
+  if (roleColumn === "lider" || roleColumn === "admin") {
+    return roleColumn;
+  }
+  return null;
+};
+
 router.post("/login", async (req, res) => {
   const { usuario, contrasena } = (req.body ?? {}) as LoginBody;
 
@@ -20,6 +41,10 @@ router.post("/login", async (req, res) => {
 
   try {
     const pool = await poolPromise;
+    const roleColumn = await getRoleColumn();
+    const roleSelect = roleColumn
+      ? `, [${roleColumn}] AS [lider]`
+      : ", CAST(0 AS bit) AS [lider]";
 
     const result = await pool
       .request()
@@ -32,6 +57,7 @@ router.post("/login", async (req, res) => {
           FechaRegistro,
           NivelConfianza,
           Activo
+          ${roleSelect}
         FROM [dbo].[Usuario]
         WHERE [usuario] = @usuario
           AND [contraseña] = @contrasena
@@ -59,4 +85,3 @@ router.post("/login", async (req, res) => {
 });
 
 export default router;
-
