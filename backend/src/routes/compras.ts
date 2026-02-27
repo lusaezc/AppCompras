@@ -85,12 +85,16 @@ router.get("/:compraId/items", async (req: Request, res: Response) => {
           dc.Subtotal,
           p.CodigoBarra,
           p.NombreProducto,
-          p.Marca,
-          p.Categoria,
+          m.Nombre AS Marca,
+          c.Nombre AS Categoria,
           p.Imagen
         FROM [dbo].[DetalleCompra] dc
         LEFT JOIN [dbo].[Producto] p
           ON p.ProductoId = dc.ProductoId
+        LEFT JOIN [dbo].[Marcas] m
+          ON m.MarcaId = p.MarcaId
+        LEFT JOIN [dbo].[Categorias] c
+          ON c.CategoriaId = p.CategoriaId
         WHERE dc.CompraId = @CompraId
         ORDER BY dc.DetalleCompraId ASC
       `);

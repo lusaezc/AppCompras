@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
+import { motion } from "framer-motion";
 import ScreenWrapper from "../components/ScreenWrapper";
+import SearchableSelect from "../components/SearchableSelect";
 
 type Supermarket = {
   SupermercadoId: number;
@@ -55,6 +57,16 @@ export default function Supermarkets() {
   const [loadingMarkets, setLoadingMarkets] = useState(false);
   const [loadingData, setLoadingData] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const cardsVariants = {
+    hidden: {},
+    visible: {
+      transition: { staggerChildren: 0.07, delayChildren: 0.04 },
+    },
+  };
+  const cardVariants = {
+    hidden: { opacity: 0, y: 10 },
+    visible: { opacity: 1, y: 0, transition: { duration: 0.24, ease: "easeOut" as const } },
+  };
 
   useEffect(() => {
     let active = true;
@@ -241,6 +253,7 @@ export default function Supermarkets() {
   return (
     <ScreenWrapper className="market-page">
       <header className="market-header">
+        <span className="products-modern-chip">Mapa y precios</span>
         <h1>Explorar supermercados</h1>
         <p>
           Selecciona un supermercado para ver su ubicacion y consultar precios
@@ -251,32 +264,37 @@ export default function Supermarkets() {
       <section className="market-controls">
         <label className="market-label">
           Supermercado
-          <select
+          <SearchableSelect
             value={selectedSupermarketId}
-            onChange={(event) => setSelectedSupermarketId(event.target.value)}
+            onChange={setSelectedSupermarketId}
             disabled={loadingMarkets}
-          >
-            <option value="">
-              {loadingMarkets ? "Cargando..." : "Selecciona supermercado"}
-            </option>
-            {supermarkets.map((market) => (
-              <option
-                key={market.SupermercadoId}
-                value={market.SupermercadoId}
-              >
-                {market.Nombre}
-              </option>
-            ))}
-          </select>
+            placeholder={
+              loadingMarkets ? "Cargando..." : "Selecciona supermercado"
+            }
+            options={supermarkets.map((market) => ({
+              value: String(market.SupermercadoId),
+              label: market.Nombre,
+            }))}
+          />
         </label>
       </section>
 
-      {loadingData && <p>Cargando datos del supermercado...</p>}
+      {loadingData && (
+        <div className="app-modern-loading" role="status">
+          <span className="app-modern-spinner" />
+          <p>Cargando datos del supermercado...</p>
+        </div>
+      )}
       {error && <p className="market-error">{error}</p>}
 
       {!loadingData && !error && locationData && (
-        <section className="market-grid">
-          <article className="market-card">
+        <motion.section
+          className="market-grid"
+          variants={cardsVariants}
+          initial="hidden"
+          animate="visible"
+        >
+          <motion.article className="market-card" variants={cardVariants}>
             <h2>Ubicacion</h2>
             <p>
               {locationData.Nombre}
@@ -332,28 +350,26 @@ export default function Supermarkets() {
                 ))}
               </div>
             )}
-          </article>
+          </motion.article>
 
-          <article className="market-card">
+          <motion.article className="market-card" variants={cardVariants}>
             <h2>Precio por producto</h2>
             <label className="market-label">
               Producto
-              <select
+              <SearchableSelect
                 value={selectedProductId}
-                onChange={(event) => setSelectedProductId(event.target.value)}
+                onChange={setSelectedProductId}
                 disabled={productPrices.length === 0}
-              >
-                <option value="">
-                  {productPrices.length === 0
+                placeholder={
+                  productPrices.length === 0
                     ? "Sin productos con precio"
-                    : "Selecciona producto"}
-                </option>
-                {productPrices.map((product) => (
-                  <option key={product.ProductoId} value={product.ProductoId}>
-                    {product.NombreProducto || `Producto ${product.ProductoId}`}
-                  </option>
-                ))}
-              </select>
+                    : "Selecciona producto"
+                }
+                options={productPrices.map((product) => ({
+                  value: String(product.ProductoId),
+                  label: product.NombreProducto || `Producto ${product.ProductoId}`,
+                }))}
+              />
             </label>
 
             {selectedProduct && (
@@ -402,8 +418,8 @@ export default function Supermarkets() {
                 </div>
               </div>
             )}
-          </article>
-        </section>
+          </motion.article>
+        </motion.section>
       )}
     </ScreenWrapper>
   );

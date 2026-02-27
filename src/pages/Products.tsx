@@ -1,6 +1,8 @@
-import { useEffect, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { motion } from "framer-motion";
+import { Html5Qrcode } from "html5-qrcode";
 import type { Product } from "../types/product";
+import useLockBodyScroll from "../hooks/useLockBodyScroll";
 
 type PriceHistoryItem = {
   RegistroPrecioId: number;
@@ -12,6 +14,11 @@ type PriceHistoryItem = {
   EsValido: boolean;
   NombreSucursal?: string | null;
   NombreUsuario?: string | null;
+};
+
+type CatalogItem = {
+  id: number;
+  name: string;
 };
 
 export default function Products() {
@@ -27,11 +34,117 @@ export default function Products() {
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [editCode, setEditCode] = useState("");
   const [editName, setEditName] = useState("");
-  const [editBrand, setEditBrand] = useState("");
-  const [editCategory, setEditCategory] = useState("");
+  const [editBrandId, setEditBrandId] = useState("");
+  const [editCategoryId, setEditCategoryId] = useState("");
+  const [brands, setBrands] = useState<CatalogItem[]>([]);
+  const [categories, setCategories] = useState<CatalogItem[]>([]);
   const [editImage, setEditImage] = useState<string | null>(null);
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
+  const [createMode, setCreateMode] = useState(false);
+  const [creatingBrand, setCreatingBrand] = useState(false);
+  const [creatingCategory, setCreatingCategory] = useState(false);
+  const [showBrandCreator, setShowBrandCreator] = useState(false);
+  const [showCategoryCreator, setShowCategoryCreator] = useState(false);
+  const [newBrandName, setNewBrandName] = useState("");
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [brandSearch, setBrandSearch] = useState("");
+  const [categorySearch, setCategorySearch] = useState("");
+  const [showBrandSuggestions, setShowBrandSuggestions] = useState(false);
+  const [showCategorySuggestions, setShowCategorySuggestions] = useState(false);
+  const [cameraActive, setCameraActive] = useState(false);
+  const [scanError, setScanError] = useState<string | null>(null);
+  const qrRef = useRef<Html5Qrcode | null>(null);
+  const isStartingRef = useRef(false);
+  const hasScannedRef = useRef(false);
+  const cardContainerVariants = {
+    hidden: {},
+    visible: {
+      transition: {
+        staggerChildren: 0.06,
+        delayChildren: 0.05,
+      },
+    },
+  };
+  const cardItemVariants = {
+    hidden: { opacity: 0, y: 10, scale: 0.985 },
+    visible: {
+      opacity: 1,
+      y: 0,
+      scale: 1,
+      transition: { duration: 0.26, ease: "easeOut" as const },
+    },
+  };
+  useLockBodyScroll(Boolean(selectedProduct) || Boolean(editingProduct) || createMode);
+
+  const totalProducts = products.length;
+  const totalBrands = useMemo(
+    () => new Set(products.map((p) => p.brandId).filter(Boolean)).size,
+    [products],
+  );
+  const totalCategories = useMemo(
+    () => new Set(products.map((p) => p.categoryId).filter(Boolean)).size,
+    [products],
+  );
+  const filteredBrands = useMemo(() => {
+    const query = brandSearch.trim().toLowerCase();
+    if (!query) return brands;
+    return brands.filter((row) => row.name.toLowerCase().includes(query));
+  }, [brands, brandSearch]);
+  const filteredCategories = useMemo(() => {
+    const query = categorySearch.trim().toLowerCase();
+    if (!query) return categories;
+    return categories.filter((row) => row.name.toLowerCase().includes(query));
+  }, [categories, categorySearch]);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadCatalogs = async () => {
+      const apiBase = import.meta.env.VITE_API_URL as string | undefined;
+      if (!apiBase) return;
+      try {
+        const [brandsRes, categoriesRes] = await Promise.all([
+          fetch(`${apiBase}/api/marcas`),
+          fetch(`${apiBase}/api/categorias`),
+        ]);
+
+        if (!brandsRes.ok || !categoriesRes.ok) return;
+
+        const brandsPayload = (await brandsRes.json()) as {
+          ok: boolean;
+          data?: Array<{ MarcaId: number; Nombre: string }>;
+        };
+
+        const categoriesPayload = (await categoriesRes.json()) as {
+          ok: boolean;
+          data?: Array<{ CategoriaId: number; Nombre: string }>;
+        };
+
+        if (!active || !brandsPayload.ok || !categoriesPayload.ok) return;
+
+        setBrands(
+          (brandsPayload.data ?? []).map((row) => ({
+            id: row.MarcaId,
+            name: row.Nombre,
+          })),
+        );
+        setCategories(
+          (categoriesPayload.data ?? []).map((row) => ({
+            id: row.CategoriaId,
+            name: row.Nombre,
+          })),
+        );
+      } catch {
+        // Silencioso: los productos siguen visibles aunque no cargue catalogo.
+      }
+    };
+
+    void loadCatalogs();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -143,6 +256,70 @@ export default function Products() {
     };
   }, [historyByProductId, selectedProduct?.id]);
 
+  useEffect(() => {
+    let isActive = true;
+
+    const stopCamera = async () => {
+      if (!qrRef.current) return;
+      try {
+        await qrRef.current.stop();
+      } catch {
+        // Ignora errores al detener camara para no romper flujo del modal.
+      } finally {
+        qrRef.current?.clear();
+        qrRef.current = null;
+      }
+    };
+
+    const startCamera = async () => {
+      if (!cameraActive || !createMode) return;
+      if (qrRef.current || isStartingRef.current) return;
+      isStartingRef.current = true;
+      setScanError(null);
+
+      const mountEl = document.getElementById("products-create-reader");
+      if (!mountEl) {
+        setScanError("No se encontro el contenedor de camara.");
+        isStartingRef.current = false;
+        return;
+      }
+
+      const qr = new Html5Qrcode("products-create-reader");
+      qrRef.current = qr;
+
+      try {
+        await qr.start(
+          { facingMode: "environment" },
+          { fps: 10, qrbox: 220 },
+          (decodedText) => {
+            if (!isActive || hasScannedRef.current) return;
+            hasScannedRef.current = true;
+            setEditCode(decodedText);
+            setCameraActive(false);
+          },
+          () => {},
+        );
+      } catch {
+        setScanError("No se pudo iniciar la camara. Verifica permisos e intenta nuevamente.");
+        setCameraActive(false);
+      } finally {
+        isStartingRef.current = false;
+      }
+    };
+
+    if (cameraActive && createMode) {
+      void startCamera();
+    } else {
+      void stopCamera();
+    }
+
+    return () => {
+      isActive = false;
+      hasScannedRef.current = false;
+      void stopCamera();
+    };
+  }, [cameraActive, createMode]);
+
   const formatDate = (value: string) => {
     const parsed = new Date(value);
     if (Number.isNaN(parsed.getTime())) return value;
@@ -215,12 +392,46 @@ export default function Products() {
     });
 
   const openEditModal = (product: Product) => {
+    setCreateMode(false);
+    setShowBrandCreator(false);
+    setShowCategoryCreator(false);
+    setNewBrandName("");
+    setNewCategoryName("");
+    setBrandSearch(product.brand ?? "");
+    setCategorySearch(product.category ?? "");
+    setShowBrandSuggestions(false);
+    setShowCategorySuggestions(false);
     setEditingProduct(product);
     setEditCode(product.code);
     setEditName(product.name);
-    setEditBrand(product.brand ?? "");
-    setEditCategory(product.category ?? "");
+    setEditBrandId(
+      product.brandId ? String(product.brandId) : "",
+    );
+    setEditCategoryId(
+      product.categoryId ? String(product.categoryId) : "",
+    );
     setEditImage(product.image ?? null);
+    setEditError(null);
+  };
+
+  const openCreateModal = () => {
+    setCreateMode(true);
+    setEditingProduct(null);
+    setShowBrandCreator(false);
+    setShowCategoryCreator(false);
+    setNewBrandName("");
+    setNewCategoryName("");
+    setBrandSearch("");
+    setCategorySearch("");
+    setShowBrandSuggestions(false);
+    setShowCategorySuggestions(false);
+    setEditCode("");
+    setEditName("");
+    setEditBrandId("");
+    setEditCategoryId("");
+    setEditImage(null);
+    setCameraActive(false);
+    setScanError(null);
     setEditError(null);
   };
 
@@ -238,9 +449,13 @@ export default function Products() {
   };
 
   const saveProductChanges = async () => {
-    if (!editingProduct) return;
+    if (!createMode && !editingProduct) return;
     if (!editCode.trim() || !editName.trim()) {
-      setEditError("Codigo y nombre son obligatorios");
+      setEditError("Debes escanear/ingresar codigo y nombre");
+      return;
+    }
+    if (!editBrandId || !editCategoryId) {
+      setEditError("Selecciona marca y categoria");
       return;
     }
 
@@ -257,95 +472,255 @@ export default function Products() {
       const payload = {
         CodigoBarra: editCode.trim(),
         NombreProducto: editName.trim(),
-        Marca: editBrand.trim() || null,
-        Categoria: editCategory.trim() || null,
+        MarcaId: Number(editBrandId),
+        CategoriaId: Number(editCategoryId),
         Imagen: editImage ?? null,
       };
 
-      const response = await fetch(
-        `${apiBase}/api/productos/${encodeURIComponent(editingProduct.id)}`,
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        },
-      );
+      const endpoint = createMode
+        ? `${apiBase}/api/productos`
+        : `${apiBase}/api/productos/${encodeURIComponent(editingProduct?.id ?? "")}`;
+      const method = createMode ? "POST" : "PUT";
+      const response = await fetch(endpoint, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
       if (!response.ok) {
         const data = await response.json().catch(() => null);
         throw new Error(data?.message || `Error ${response.status}`);
       }
 
-      setProducts((prev) =>
-        prev.map((p) =>
-          p.id === editingProduct.id
-            ? {
-                ...p,
-                code: editCode.trim(),
-                name: editName.trim(),
-                brand: editBrand.trim(),
-                category: editCategory.trim(),
-                description: editCategory.trim(),
-                image: editImage ?? undefined,
-              }
-            : p,
-        ),
-      );
+      const refreshResponse = await fetch(`${apiBase}/api/productos`);
+      if (refreshResponse.ok) {
+        const refreshPayload = (await refreshResponse.json()) as {
+          ok: boolean;
+          data?: Product[];
+        };
+        if (refreshPayload.ok && refreshPayload.data) {
+          setProducts(refreshPayload.data);
+        }
+      }
 
+      setCreateMode(false);
       setEditingProduct(null);
     } catch (err) {
       setEditError(
-        err instanceof Error ? err.message : "Error actualizando producto",
+        err instanceof Error
+          ? err.message
+          : createMode
+            ? "Error creando producto"
+            : "Error actualizando producto",
       );
     } finally {
       setEditLoading(false);
     }
   };
 
+  const createBrandFromModal = async () => {
+    const apiBase = import.meta.env.VITE_API_URL as string | undefined;
+    if (!apiBase) {
+      setEditError("No se encontro VITE_API_URL.");
+      return;
+    }
+    const finalName = newBrandName.trim();
+    if (!finalName) return;
+
+    setCreatingBrand(true);
+    setEditError(null);
+    try {
+      const response = await fetch(`${apiBase}/api/marcas`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ Nombre: finalName }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as
+        | {
+            ok: boolean;
+            data?: { MarcaId: number; Nombre: string };
+            message?: string;
+          }
+        | null;
+
+      if (!response.ok || !payload?.ok || !payload.data) {
+        throw new Error(payload?.message || "No se pudo crear la marca");
+      }
+
+      const created = { id: payload.data.MarcaId, name: payload.data.Nombre };
+      setBrands((prev) =>
+        [...prev, created].sort((a, b) => a.name.localeCompare(b.name, "es")),
+      );
+      setEditBrandId(String(created.id));
+      setBrandSearch(created.name);
+      setShowBrandSuggestions(false);
+      setNewBrandName("");
+      setShowBrandCreator(false);
+    } catch (error) {
+      setEditError(error instanceof Error ? error.message : "Error creando marca");
+    } finally {
+      setCreatingBrand(false);
+    }
+  };
+
+  const createCategoryFromModal = async () => {
+    const apiBase = import.meta.env.VITE_API_URL as string | undefined;
+    if (!apiBase) {
+      setEditError("No se encontro VITE_API_URL.");
+      return;
+    }
+    const finalName = newCategoryName.trim();
+    if (!finalName) return;
+
+    setCreatingCategory(true);
+    setEditError(null);
+    try {
+      const response = await fetch(`${apiBase}/api/categorias`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ Nombre: finalName }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as
+        | {
+            ok: boolean;
+            data?: { CategoriaId: number; Nombre: string };
+            message?: string;
+          }
+        | null;
+
+      if (!response.ok || !payload?.ok || !payload.data) {
+        throw new Error(payload?.message || "No se pudo crear la categoria");
+      }
+
+      const created = { id: payload.data.CategoriaId, name: payload.data.Nombre };
+      setCategories((prev) =>
+        [...prev, created].sort((a, b) => a.name.localeCompare(b.name, "es")),
+      );
+      setEditCategoryId(String(created.id));
+      setCategorySearch(created.name);
+      setShowCategorySuggestions(false);
+      setNewCategoryName("");
+      setShowCategoryCreator(false);
+    } catch (error) {
+      setEditError(
+        error instanceof Error ? error.message : "Error creando categoria",
+      );
+    } finally {
+      setCreatingCategory(false);
+    }
+  };
+
   return (
-    <motion.div
-      className="screen"
-    >
-      <h2>Administrar productos</h2>
+    <motion.div className="screen products-modern-page">
+      <header className="products-modern-header">
+        <span className="products-modern-chip">Catalogo central</span>
+        <div className="products-header-row">
+          <h2>Administrar productos</h2>
+          <button
+            type="button"
+            className="products-add-btn"
+            onClick={openCreateModal}
+          >
+            Nuevo producto
+          </button>
+        </div>
+        <p>
+          Gestiona el catalogo, revisa historial de precios y actualiza la
+          informacion de cada producto.
+        </p>
+      </header>
 
-      {loading && <p>Cargando productos...</p>}
+      <section className="products-modern-stats">
+        <article className="products-modern-stat-card">
+          <span>Total productos</span>
+          <strong>{totalProducts}</strong>
+        </article>
+        <article className="products-modern-stat-card">
+          <span>Marcas activas</span>
+          <strong>{totalBrands}</strong>
+        </article>
+        <article className="products-modern-stat-card">
+          <span>Categorias activas</span>
+          <strong>{totalCategories}</strong>
+        </article>
+      </section>
 
-      {error && <p style={{ color: "#b91c1c" }}>{error}</p>}
+      {error && <p className="purchase-error">{error}</p>}
 
-      {!loading && !error && products.length === 0 && (
-        <p>No hay productos registrados</p>
+      {loading && (
+        <section className="products-modern-grid">
+          {Array.from({ length: 6 }).map((_, index) => (
+            <article className="products-skeleton-card" key={`skeleton-${index}`}>
+              <div className="products-skeleton-thumb" />
+              <div className="products-skeleton-lines">
+                <span />
+                <span />
+                <span />
+              </div>
+            </article>
+          ))}
+        </section>
       )}
 
-      {products.map((product) => (
-        <button
-          key={product.id}
-          className="product-card"
-          type="button"
-          onClick={() => {
-            setSelectedProduct(product);
-            setHistoryError(null);
-          }}
-        >
-          <div className="product-content">
-            {product.image && (
-              <img
-                src={product.image}
-                alt={product.name}
-                className="product-image product-image-small"
-              />
-            )}
+      {!loading && !error && products.length === 0 && (
+        <div className="products-empty-state">
+          Aun no hay productos registrados en el catalogo.
+        </div>
+      )}
 
-            <div className="product-info">
-              <strong>{product.name}</strong>
-              <div>Código: {product.code}</div>
-              <div>Marca: {product.brand || "Sin marca"}</div>
-              <div>Categoría: {product.category || "Sin categoría"}</div>
-              {/* 👇 ID SOLO PARA DEBUG */}
-              <div style={{ opacity: 0.6 }}>ID: {product.id}</div>
-            </div>
-          </div>
-        </button>
-      ))}
+      {!loading && !error && products.length > 0 && (
+        <motion.section
+          className="products-modern-grid"
+          variants={cardContainerVariants}
+          initial="hidden"
+          animate="visible"
+        >
+          {products.map((product) => (
+            <motion.button
+              key={product.id}
+              className="product-card products-modern-card"
+              type="button"
+              onClick={() => {
+                setSelectedProduct(product);
+                setHistoryError(null);
+              }}
+              variants={cardItemVariants}
+            >
+              <div className="product-content">
+                <div className="products-premium-media">
+                  {product.image ? (
+                    <img
+                      src={product.image}
+                      alt={product.name}
+                      className="product-image product-image-small"
+                    />
+                  ) : (
+                    <div className="products-premium-media-empty">Sin imagen</div>
+                  )}
+                </div>
+
+                <div className="product-info products-premium-body">
+                  <div className="products-premium-top">
+                    <strong className="products-premium-name">{product.name}</strong>
+                    <span className="products-premium-id">#{product.id}</span>
+                  </div>
+                  <div className="products-premium-code">Codigo: {product.code}</div>
+                  <div className="products-premium-tags">
+                    <span className="products-premium-tag is-brand">
+                      Marca: {product.brand || "Sin marca"}
+                    </span>
+                    <span className="products-premium-tag is-category">
+                      Categoria: {product.category || "Sin categoria"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </motion.button>
+          ))}
+        </motion.section>
+      )}
 
       {selectedProduct && (
         <div
@@ -436,26 +811,48 @@ export default function Products() {
         </div>
       )}
 
-      {editingProduct && (
+      {(editingProduct || createMode) && (
         <div
-          className="modal-overlay"
+          className="modal-overlay modal-overlay-glass"
           onClick={(event) => {
             if (event.target === event.currentTarget) {
+              setCreateMode(false);
               setEditingProduct(null);
             }
           }}
         >
-          <div className="modal product-edit-modal">
-            <h3>Modificar producto</h3>
-            <p>Actualiza los campos del registro.</p>
+          <div className="modal product-edit-modal premium-glass-modal">
+            <h3>{createMode ? "Nuevo producto" : "Modificar producto"}</h3>
+            <p>
+              {createMode
+                ? "Escanea o ingresa el codigo de barras y completa los campos."
+                : "Actualiza los campos del registro."}
+            </p>
 
             <div className="form-group">
               <label>Codigo de barras</label>
-              <input
-                value={editCode}
-                readOnly
-                disabled
-              />
+              <div className="products-code-row">
+                <input
+                  value={editCode}
+                  onChange={(e) => setEditCode(e.target.value)}
+                  disabled={editLoading}
+                  placeholder="Escanea o ingresa codigo"
+                />
+                {createMode && (
+                  <button
+                    type="button"
+                    className="products-scan-btn"
+                    onClick={() => {
+                      setScanError(null);
+                      setCameraActive(true);
+                    }}
+                    disabled={editLoading}
+                  >
+                    Escanear
+                  </button>
+                )}
+              </div>
+              {createMode && scanError && <small className="products-scan-error">{scanError}</small>}
             </div>
 
             <div className="form-group">
@@ -469,47 +866,209 @@ export default function Products() {
 
             <div className="form-group">
               <label>Marca</label>
-              <input
-                value={editBrand}
-                onChange={(e) => setEditBrand(e.target.value)}
-                disabled={editLoading}
-              />
+              <div className="products-select-row">
+                <div className="products-combobox">
+                  <input
+                    type="text"
+                    className="products-search-input"
+                    placeholder="Selecciona o escribe marca..."
+                    value={brandSearch}
+                    onFocus={() => setShowBrandSuggestions(true)}
+                    onBlur={() => {
+                      window.setTimeout(() => setShowBrandSuggestions(false), 120);
+                    }}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setBrandSearch(value);
+                      setEditBrandId("");
+                      setShowBrandSuggestions(true);
+                    }}
+                    disabled={editLoading}
+                  />
+                  {showBrandSuggestions && (
+                    <div className="products-suggestions-list">
+                      {filteredBrands.length === 0 && (
+                        <div className="products-suggestion-empty">
+                          Sin coincidencias
+                        </div>
+                      )}
+                      {filteredBrands.map((row) => (
+                        <button
+                          type="button"
+                          key={row.id}
+                          className="products-suggestion-item"
+                          onMouseDown={() => {
+                            setEditBrandId(String(row.id));
+                            setBrandSearch(row.name);
+                            setShowBrandSuggestions(false);
+                          }}
+                        >
+                          {row.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  className="products-add-catalog-btn"
+                  onClick={() => setShowBrandCreator((prev) => !prev)}
+                  disabled={editLoading || creatingBrand}
+                  title="Agregar nueva marca"
+                >
+                  {showBrandCreator ? "×" : "+"}
+                </button>
+              </div>
+              {showBrandCreator && (
+                <div className="products-inline-create">
+                  <input
+                    type="text"
+                    value={newBrandName}
+                    onChange={(e) => setNewBrandName(e.target.value)}
+                    placeholder="Nombre de marca"
+                    disabled={editLoading || creatingBrand}
+                  />
+                  <div className="products-inline-create-actions">
+                    <button
+                      type="button"
+                      className="secondary-button products-inline-cancel"
+                      onClick={() => {
+                        setShowBrandCreator(false);
+                        setNewBrandName("");
+                      }}
+                      disabled={editLoading || creatingBrand}
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      className="product-save-btn products-inline-save"
+                      onClick={createBrandFromModal}
+                      disabled={editLoading || creatingBrand || !newBrandName.trim()}
+                    >
+                      {creatingBrand ? "Agregando..." : "Agregar"}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="form-group">
               <label>Categoria</label>
-              <input
-                value={editCategory}
-                onChange={(e) => setEditCategory(e.target.value)}
-                disabled={editLoading}
-              />
+              <div className="products-select-row">
+                <div className="products-combobox">
+                  <input
+                    type="text"
+                    className="products-search-input"
+                    placeholder="Selecciona o escribe categoria..."
+                    value={categorySearch}
+                    onFocus={() => setShowCategorySuggestions(true)}
+                    onBlur={() => {
+                      window.setTimeout(
+                        () => setShowCategorySuggestions(false),
+                        120,
+                      );
+                    }}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setCategorySearch(value);
+                      setEditCategoryId("");
+                      setShowCategorySuggestions(true);
+                    }}
+                    disabled={editLoading}
+                  />
+                  {showCategorySuggestions && (
+                    <div className="products-suggestions-list">
+                      {filteredCategories.length === 0 && (
+                        <div className="products-suggestion-empty">
+                          Sin coincidencias
+                        </div>
+                      )}
+                      {filteredCategories.map((row) => (
+                        <button
+                          type="button"
+                          key={row.id}
+                          className="products-suggestion-item"
+                          onMouseDown={() => {
+                            setEditCategoryId(String(row.id));
+                            setCategorySearch(row.name);
+                            setShowCategorySuggestions(false);
+                          }}
+                        >
+                          {row.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  className="products-add-catalog-btn"
+                  onClick={() => setShowCategoryCreator((prev) => !prev)}
+                  disabled={editLoading || creatingCategory}
+                  title="Agregar nueva categoria"
+                >
+                  {showCategoryCreator ? "×" : "+"}
+                </button>
+              </div>
+              {showCategoryCreator && (
+                <div className="products-inline-create">
+                  <input
+                    type="text"
+                    value={newCategoryName}
+                    onChange={(e) => setNewCategoryName(e.target.value)}
+                    placeholder="Nombre de categoria"
+                    disabled={editLoading || creatingCategory}
+                  />
+                  <div className="products-inline-create-actions">
+                    <button
+                      type="button"
+                      className="secondary-button products-inline-cancel"
+                      onClick={() => {
+                        setShowCategoryCreator(false);
+                        setNewCategoryName("");
+                      }}
+                      disabled={editLoading || creatingCategory}
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      className="product-save-btn products-inline-save"
+                      onClick={createCategoryFromModal}
+                      disabled={editLoading || creatingCategory || !newCategoryName.trim()}
+                    >
+                      {creatingCategory ? "Agregando..." : "Agregar"}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
-            <div className="form-group">
-              <label>Imagen</label>
-              <input
-                type="file"
-                accept="image/*"
-                capture="environment"
-                onChange={handleEditImage}
-                disabled={editLoading}
-              />
-            </div>
-
-            {editImage && (
-              <img
-                src={editImage}
-                alt={editName || "Preview"}
-                className="image-preview"
-              />
+            {!editImage && (
+              <div className="form-group">
+                <label>Imagen</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleEditImage}
+                  disabled={editLoading}
+                />
+              </div>
             )}
 
             {editImage && (
-              <div className="modal-actions">
+              <div className="product-image-edit-row">
+                <img
+                  src={editImage}
+                  alt={editName || "Preview"}
+                  className="image-preview"
+                />
                 <button
-                  className="secondary-button"
+                  className="secondary-button product-image-remove-btn"
                   onClick={() => setEditImage(null)}
                   disabled={editLoading}
+                  type="button"
                 >
                   Quitar imagen
                 </button>
@@ -521,7 +1080,11 @@ export default function Products() {
             <div className="modal-actions">
               <button
                 className="secondary-button"
-                onClick={() => setEditingProduct(null)}
+                onClick={() => {
+                  setCameraActive(false);
+                  setCreateMode(false);
+                  setEditingProduct(null);
+                }}
                 disabled={editLoading}
               >
                 Cancelar
@@ -532,9 +1095,39 @@ export default function Products() {
                 onClick={saveProductChanges}
                 disabled={editLoading}
               >
-                {editLoading ? "Guardando..." : "Guardar cambios"}
+                {editLoading
+                  ? "Guardando..."
+                  : createMode
+                    ? "Crear producto"
+                    : "Guardar cambios"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {createMode && cameraActive && (
+        <div
+          className="products-camera-overlay"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              setCameraActive(false);
+            }
+          }}
+        >
+          <div className="products-camera-sheet">
+            <div className="products-camera-sheet-header">
+              <strong>Escanear codigo</strong>
+              <button
+                type="button"
+                className="products-camera-close-btn"
+                onClick={() => setCameraActive(false)}
+              >
+                Cerrar
+              </button>
+            </div>
+            <div id="products-create-reader" className="products-camera-reader fullscreen" />
+            {scanError && <small className="products-scan-error">{scanError}</small>}
           </div>
         </div>
       )}

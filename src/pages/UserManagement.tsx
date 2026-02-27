@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { motion } from "framer-motion";
 import { Navigate, useNavigate } from "react-router-dom";
 import ScreenWrapper from "../components/ScreenWrapper";
 import { readAuthUser } from "../auth";
@@ -23,6 +24,16 @@ export default function UserManagement() {
   const [status, setStatus] = useState<string | null>(null);
   const [actionLoadingId, setActionLoadingId] = useState<number | null>(null);
   const [accessDenied, setAccessDenied] = useState(false);
+  const listVariants = {
+    hidden: {},
+    visible: {
+      transition: { staggerChildren: 0.05, delayChildren: 0.03 },
+    },
+  };
+  const rowVariants = {
+    hidden: { opacity: 0, y: 8 },
+    visible: { opacity: 1, y: 0, transition: { duration: 0.2, ease: "easeOut" as const } },
+  };
 
   useEffect(() => {
     if (!authUser?.UserId) return;
@@ -197,21 +208,32 @@ export default function UserManagement() {
   return (
     <ScreenWrapper className="user-management-page">
       <header className="user-management-header">
+        <span className="products-modern-chip">Administracion</span>
         <h1>Gestion de usuarios</h1>
         <p>Activa o desactiva cuentas para permitir o bloquear inicio de sesion.</p>
       </header>
 
       <section className="profile-card-block">
-        {loading && <p>Cargando usuarios...</p>}
+        {loading && (
+          <div className="app-modern-loading" role="status">
+            <span className="app-modern-spinner" />
+            <p>Cargando usuarios...</p>
+          </div>
+        )}
         {error && <p className="profile-error">{error}</p>}
         {status && <p className="product-form-success">{status}</p>}
 
         {!loading && !error && users.length === 0 && (
-          <p>No hay usuarios para administrar.</p>
+          <div className="app-modern-empty">No hay usuarios para administrar.</div>
         )}
 
         {!loading && !error && users.length > 0 && (
-          <div className="profile-admin-list">
+          <motion.div
+            className="profile-admin-list"
+            variants={listVariants}
+            initial="hidden"
+            animate="visible"
+          >
             {users.map((row) => {
               const active = Boolean(row.Activo);
               const rowIsLider = isLiderFlag(row.lider);
@@ -220,7 +242,11 @@ export default function UserManagement() {
               const disableRoleToggle = isCurrentUser;
 
               return (
-                <article key={row.UserId} className="profile-admin-row">
+                <motion.article
+                  key={row.UserId}
+                  className="profile-admin-row"
+                  variants={rowVariants}
+                >
                   <div className="profile-admin-user">
                     <strong className="profile-admin-name-row">
                       <span>{row.Nombre}</span>
@@ -266,10 +292,10 @@ export default function UserManagement() {
                         : "Hacer administrador"}
                     </button>
                   </div>
-                </article>
+                </motion.article>
               );
             })}
-          </div>
+          </motion.div>
         )}
       </section>
 

@@ -28,14 +28,18 @@ router.get("/", async (req, res) => {
           rp.EsValido,
           p.CodigoBarra,
           p.NombreProducto,
-          p.Marca,
-          p.Categoria,
+          m.Nombre AS Marca,
+          c.Nombre AS Categoria,
           s.NombreSucursal,
           sup.Nombre AS NombreSupermercado,
           u.Nombre AS NombreUsuario
         FROM [dbo].[RegistroPrecio] rp
         LEFT JOIN [dbo].[Producto] p
           ON p.ProductoId = rp.ProductoId
+        LEFT JOIN [dbo].[Marcas] m
+          ON m.MarcaId = p.MarcaId
+        LEFT JOIN [dbo].[Categorias] c
+          ON c.CategoriaId = p.CategoriaId
         LEFT JOIN [dbo].[Sucursal] s
           ON s.SucursalId = rp.SucursalId
         LEFT JOIN [dbo].[Supermercado] sup

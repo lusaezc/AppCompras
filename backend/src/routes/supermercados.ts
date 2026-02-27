@@ -192,8 +192,8 @@ router.get("/:id/productos-precios", async (req: Request, res: Response) => {
             rp.SucursalId,
             p.CodigoBarra,
             p.NombreProducto,
-            p.Marca,
-            p.Categoria,
+            m.Nombre AS Marca,
+            c.Nombre AS Categoria,
             p.Imagen,
             s.NombreSucursal,
             ROW_NUMBER() OVER (
@@ -205,6 +205,10 @@ router.get("/:id/productos-precios", async (req: Request, res: Response) => {
             ON s.SucursalId = rp.SucursalId
           INNER JOIN [dbo].[Producto] p
             ON p.ProductoId = rp.ProductoId
+          LEFT JOIN [dbo].[Marcas] m
+            ON m.MarcaId = p.MarcaId
+          LEFT JOIN [dbo].[Categorias] c
+            ON c.CategoriaId = p.CategoriaId
           WHERE s.SupermercadoId = @SupermercadoId
             AND rp.EsValido = 1
         )

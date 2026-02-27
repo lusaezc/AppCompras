@@ -128,35 +128,23 @@ export default function Scanner() {
     };
   }, [navigate]);
 
-  const statusLabel = scanError ? "Se requiere atencion" : "Camara activa";
-
   return (
     <ScreenWrapper className="scanner-screen">
-      <div className="scanner-modern">
-        <header className="scanner-hero">
-          <span className="scanner-chip">Escaneo inteligente</span>
-          <h1>Escanear codigo</h1>
-          <p>
-            Enfoca el codigo de barras dentro del marco para consultar el
-            producto y continuar en segundos.
-          </p>
-        </header>
-
-        <section className="scanner-panel">
-          <div className="scanner-panel-header">
-            <h2>Camara trasera</h2>
-            <span
-              className={[
-                "scanner-status",
-                scanError ? "is-warning" : "is-ready",
-              ].join(" ")}
+      <div className="scanner-fullscreen-overlay">
+        <div className="scanner-fullscreen-shell">
+          <div className="scanner-fullscreen-header">
+            <strong>Escanear codigo</strong>
+            <button
+              type="button"
+              className="scanner-fullscreen-close-btn"
+              onClick={() => navigate("/")}
             >
-              {statusLabel}
-            </span>
+              Cerrar
+            </button>
           </div>
 
-          <div className="scanner-reader-wrap">
-            <div id="reader" className="scanner-reader" />
+          <div className="scanner-reader-wrap scanner-reader-wrap-fullscreen">
+            <div id="reader" className="scanner-reader scanner-reader-fullscreen" />
             <div className="scanner-frame" aria-hidden="true">
               <span />
               <span />
@@ -165,28 +153,11 @@ export default function Scanner() {
             </div>
           </div>
 
-          <p
-            className={[
-              "scanner-message",
-              scanError ? "is-error" : "is-helper",
-            ].join(" ")}
-            role="status"
-          >
+          <p className={["scanner-message", scanError ? "is-error" : "is-helper"].join(" ")} role="status">
             {scanError ||
               "Escaneando: al detectar un codigo se abrira el detalle o el formulario del producto."}
           </p>
-        </section>
-
-        <section className="scanner-tips">
-          <article className="scanner-tip-card">
-            <h3>Mejor lectura</h3>
-            <p>Manten el celular firme y evita reflejos sobre la etiqueta.</p>
-          </article>
-          <article className="scanner-tip-card">
-            <h3>Lectura rapida</h3>
-            <p>Acerca o aleja la camara hasta que el codigo quede nitido.</p>
-          </article>
-        </section>
+        </div>
       </div>
     </ScreenWrapper>
   );

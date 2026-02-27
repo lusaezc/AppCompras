@@ -5,6 +5,8 @@ export type Product = {
   description?: string;
   brand?: string;
   category?: string;
+  brandId?: number | null;
+  categoryId?: number | null;
   image?: string; // 👈 base64
   createdAt?: string;
 };

@@ -18,6 +18,7 @@ import { readAuthUser } from "./auth";
 import { applyTheme, readSavedTheme } from "./theme";
 import PriceFeed from "./pages/PriceFeed";
 import UserManagement from "./pages/UserManagement";
+import ReceiptOcr from "./pages/ReceiptOcr";
 import GlobalDbLoader from "./components/GlobalDbLoader";
 import {
   getPendingRequests,
@@ -139,6 +140,14 @@ function AnimatedRoutes() {
             <LiderRoute>
               <PriceFeed />
             </LiderRoute>
+          }
+        />
+        <Route
+          path="/ocr-boleta"
+          element={
+            <ProtectedRoute>
+              <ReceiptOcr />
+            </ProtectedRoute>
           }
         />
         <Route

@@ -1,6 +1,12 @@
+﻿import { useEffect, useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { useState } from "react";
 import { motion } from "framer-motion";
+import SearchableSelect from "../components/SearchableSelect";
+
+type CatalogItem = {
+  id: number;
+  name: string;
+};
 
 export default function ProductForm() {
   const { code } = useParams<{ code: string }>();
@@ -8,16 +14,99 @@ export default function ProductForm() {
   const location = useLocation();
   const params = new URLSearchParams(location.search);
   const from = params.get("from");
-  const apiBaseUrl = import.meta.env.VITE_API_URL || "http://localhost:3001";
+  const apiBaseUrl = import.meta.env.VITE_API_URL as string | undefined;
 
   const [name, setName] = useState("");
-  const [brand, setBrand] = useState("");
-  const [category, setCategory] = useState("");
+  const [brandId, setBrandId] = useState("");
+  const [categoryId, setCategoryId] = useState("");
+  const [brands, setBrands] = useState<CatalogItem[]>([]);
+  const [categories, setCategories] = useState<CatalogItem[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
+  const [newBrandName, setNewBrandName] = useState("");
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [creatingBrand, setCreatingBrand] = useState(false);
+  const [creatingCategory, setCreatingCategory] = useState(false);
   const [image, setImage] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const requestTimeoutMs = 15000;
+
+  useEffect(() => {
+    let active = true;
+
+    const loadCatalogs = async () => {
+      if (!apiBaseUrl) {
+        setCatalogError("No se encontro VITE_API_URL.");
+        return;
+      }
+      setCatalogLoading(true);
+      setCatalogError(null);
+      try {
+        const [brandsRes, categoriesRes] = await Promise.all([
+          fetch(`${apiBaseUrl}/api/marcas`),
+          fetch(`${apiBaseUrl}/api/categorias`),
+        ]);
+
+        if (!brandsRes.ok || !categoriesRes.ok) {
+          throw new Error("No se pudieron cargar marcas y categorias");
+        }
+
+        const brandsPayload = (await brandsRes.json()) as {
+          ok: boolean;
+          data?: Array<{ MarcaId: number; Nombre: string }>;
+          message?: string;
+        };
+
+        const categoriesPayload = (await categoriesRes.json()) as {
+          ok: boolean;
+          data?: Array<{ CategoriaId: number; Nombre: string }>;
+          message?: string;
+        };
+
+        if (!brandsPayload.ok || !categoriesPayload.ok) {
+          throw new Error(
+            brandsPayload.message ||
+              categoriesPayload.message ||
+              "Error cargando catalogos",
+          );
+        }
+
+        if (!active) return;
+
+        setBrands(
+          (brandsPayload.data ?? []).map((item) => ({
+            id: item.MarcaId,
+            name: item.Nombre,
+          })),
+        );
+
+        setCategories(
+          (categoriesPayload.data ?? []).map((item) => ({
+            id: item.CategoriaId,
+            name: item.Nombre,
+          })),
+        );
+      } catch (error) {
+        if (!active) return;
+        setCatalogError(
+          error instanceof Error ? error.message : "Error cargando catalogos",
+        );
+      } finally {
+        if (active) {
+          setCatalogLoading(false);
+        }
+      }
+    };
+
+    void loadCatalogs();
+
+    return () => {
+      active = false;
+    };
+  }, [apiBaseUrl]);
+
   const closeToast = () => {
     setSaved(false);
     setSaveError(null);
@@ -26,7 +115,6 @@ export default function ProductForm() {
   if (!code) {
     return <p>Codigo invalido</p>;
   }
-
 
   const handleImageCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -68,8 +156,105 @@ export default function ProductForm() {
       reader.readAsDataURL(file);
     });
 
+  const createBrand = async () => {
+    if (!apiBaseUrl) {
+      setSaveError("No se encontro VITE_API_URL.");
+      return;
+    }
+    const finalName = newBrandName.trim();
+    if (!finalName) return;
+
+    setCreatingBrand(true);
+    setSaveError(null);
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/marcas`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ Nombre: finalName }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as
+        | {
+            ok: boolean;
+            data?: { MarcaId: number; Nombre: string };
+            message?: string;
+          }
+        | null;
+
+      if (!response.ok || !payload?.ok || !payload.data) {
+        throw new Error(payload?.message || "No se pudo crear la marca");
+      }
+
+      const created = { id: payload.data.MarcaId, name: payload.data.Nombre };
+      setBrands((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name, "es")));
+      setBrandId(String(created.id));
+      setNewBrandName("");
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Error creando marca");
+    } finally {
+      setCreatingBrand(false);
+    }
+  };
+
+  const createCategory = async () => {
+    if (!apiBaseUrl) {
+      setSaveError("No se encontro VITE_API_URL.");
+      return;
+    }
+    const finalName = newCategoryName.trim();
+    if (!finalName) return;
+
+    setCreatingCategory(true);
+    setSaveError(null);
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/categorias`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ Nombre: finalName }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as
+        | {
+            ok: boolean;
+            data?: { CategoriaId: number; Nombre: string };
+            message?: string;
+          }
+        | null;
+
+      if (!response.ok || !payload?.ok || !payload.data) {
+        throw new Error(payload?.message || "No se pudo crear la categoria");
+      }
+
+      const created = {
+        id: payload.data.CategoriaId,
+        name: payload.data.Nombre,
+      };
+      setCategories((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name, "es")));
+      setCategoryId(String(created.id));
+      setNewCategoryName("");
+    } catch (error) {
+      setSaveError(
+        error instanceof Error ? error.message : "Error creando categoria",
+      );
+    } finally {
+      setCreatingCategory(false);
+    }
+  };
+
   const saveProduct = async () => {
+    if (!apiBaseUrl) {
+      setSaveError("No se encontro VITE_API_URL.");
+      return;
+    }
     if (!name.trim()) return;
+    if (!brandId || !categoryId) {
+      setSaveError("Selecciona marca y categoria");
+      return;
+    }
     if (isSaving) return;
 
     setIsSaving(true);
@@ -83,8 +268,8 @@ export default function ProductForm() {
       const payload = {
         CodigoBarra: code,
         NombreProducto: name.trim(),
-        Marca: brand.trim() || null,
-        Categoria: category.trim() || null,
+        MarcaId: Number(brandId),
+        CategoriaId: Number(categoryId),
         Imagen: image ?? null,
         Activo: true,
       };
@@ -146,34 +331,80 @@ export default function ProductForm() {
           />
 
           <label className="product-form-label">Marca</label>
-          <input
-            placeholder="Marca"
-            value={brand}
-            onChange={(e) => setBrand(e.target.value)}
-            disabled={isSaving}
-            className="product-form-input"
+          <SearchableSelect
+            value={brandId}
+            onChange={setBrandId}
+            disabled={isSaving || catalogLoading}
+            className="product-form-searchable"
+            placeholder="Selecciona marca"
+            options={brands.map((brand) => ({
+              value: String(brand.id),
+              label: brand.name,
+            }))}
           />
 
+          <div className="product-form-inline-row">
+            <input
+              placeholder="Nueva marca"
+              value={newBrandName}
+              onChange={(e) => setNewBrandName(e.target.value)}
+              disabled={isSaving || creatingBrand}
+              className="product-form-input"
+            />
+            <button
+              type="button"
+              onClick={createBrand}
+              disabled={!newBrandName.trim() || creatingBrand || isSaving}
+              className="product-form-secondary"
+            >
+              {creatingBrand ? "Creando..." : "Agregar marca"}
+            </button>
+          </div>
+
           <label className="product-form-label">Categoria</label>
-          <input
-            placeholder="Categoria"
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            disabled={isSaving}
-            className="product-form-input"
+          <SearchableSelect
+            value={categoryId}
+            onChange={setCategoryId}
+            disabled={isSaving || catalogLoading}
+            className="product-form-searchable"
+            placeholder="Selecciona categoria"
+            options={categories.map((category) => ({
+              value: String(category.id),
+              label: category.name,
+            }))}
           />
+
+          <div className="product-form-inline-row">
+            <input
+              placeholder="Nueva categoria"
+              value={newCategoryName}
+              onChange={(e) => setNewCategoryName(e.target.value)}
+              disabled={isSaving || creatingCategory}
+              className="product-form-input"
+            />
+            <button
+              type="button"
+              onClick={createCategory}
+              disabled={
+                !newCategoryName.trim() || creatingCategory || isSaving
+              }
+              className="product-form-secondary"
+            >
+              {creatingCategory ? "Creando..." : "Agregar categoria"}
+            </button>
+          </div>
 
           <div className="product-form-file">
             <label className="product-form-label">Imagen</label>
             <input
               type="file"
               accept="image/*"
-              capture="environment"
               onChange={handleImageCapture}
               disabled={isSaving}
             />
           </div>
 
+          {catalogError && <p className="product-form-error">{catalogError}</p>}
 
           {image && (
             <div className="product-form-preview">

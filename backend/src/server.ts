@@ -11,13 +11,15 @@ import sucursalesRoutes from "./routes/sucursales";
 import comprasRoutes from "./routes/compras";
 import authRoutes from "./routes/auth";
 import preciosRoutes from "./routes/precios";
+import marcasRoutes from "./routes/marcas";
+import categoriasRoutes from "./routes/categorias";
+import ocrRoutes from "./routes/ocr";
 
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ limit: "10mb", extended: true }));
 
-// 👇 AQUÍ se define el /api
 app.use("/api", testRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/productos", productosRoutes);
@@ -26,8 +28,11 @@ app.use("/api/usuarios", usuariosRoutes);
 app.use("/api/sucursales", sucursalesRoutes);
 app.use("/api/compras", comprasRoutes);
 app.use("/api/precios", preciosRoutes);
+app.use("/api/marcas", marcasRoutes);
+app.use("/api/categorias", categoriasRoutes);
+app.use("/api/ocr", ocrRoutes);
 
-app.use((err: Error & { type?: string }, req: Request, res: Response, next: NextFunction) => {
+app.use((err: Error & { type?: string }, _req: Request, res: Response, next: NextFunction) => {
   if (err?.type === "entity.too.large") {
     return res.status(413).json({
       ok: false,
@@ -36,6 +41,7 @@ app.use((err: Error & { type?: string }, req: Request, res: Response, next: Next
   }
   next(err);
 });
+
 const PORT = Number(process.env.PORT) || 3001;
 const HOST = "0.0.0.0";
 app.listen(PORT, HOST, () => {

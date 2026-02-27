@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { Html5Qrcode } from "html5-qrcode";
 import { useLocation, useNavigate } from "react-router-dom";
 import type { Product } from "../types/product";
+import SearchableSelect from "../components/SearchableSelect";
 
 type CartItem = {
   id: string;
@@ -81,6 +82,16 @@ export default function Form() {
 
   const [cameraActive, setCameraActive] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
+  const cartVariants = {
+    hidden: {},
+    visible: {
+      transition: { staggerChildren: 0.05, delayChildren: 0.02 },
+    },
+  };
+  const cartItemVariants = {
+    hidden: { opacity: 0, y: 8 },
+    visible: { opacity: 1, y: 0, transition: { duration: 0.2, ease: "easeOut" as const } },
+  };
   const qrRef = useRef<Html5Qrcode | null>(null);
   const isStartingRef = useRef(false);
 
@@ -478,26 +489,26 @@ export default function Form() {
   }, [beginPendingProduct, cameraActive, pendingCode]);
 
   return (
-    <motion.div className="screen">
-      <h2>Nuevo registro</h2>
+    <motion.div className="screen form-modern-page">
+      <header className="form-modern-header">
+        <span className="products-modern-chip">Registro inteligente</span>
+        <h2>Nuevo registro</h2>
+        <p>Escanea productos, arma tu carrito y guarda la compra en un solo flujo.</p>
+      </header>
 
-      <form className="form">
+      <form className="form form-modern-card">
         <label>
           Persona
-          <select
+          <SearchableSelect
             value={person}
-            onChange={(e) => setPerson(e.target.value)}
+            onChange={setPerson}
             disabled={usuariosLoading}
-          >
-            <option value="">
-              {usuariosLoading ? "Cargando..." : "Selecciona"}
-            </option>
-            {usuarios.map((usuario) => (
-              <option key={usuario.UserId} value={usuario.UserId}>
-                {usuario.Nombre}
-              </option>
-            ))}
-          </select>
+            placeholder={usuariosLoading ? "Cargando..." : "Selecciona"}
+            options={usuarios.map((usuario) => ({
+              value: String(usuario.UserId),
+              label: usuario.Nombre,
+            }))}
+          />
           {usuariosError && (
             <small style={{ color: "#b91c1c" }}>{usuariosError}</small>
           )}
@@ -505,23 +516,19 @@ export default function Form() {
 
         <label>
           Supermercado
-          <select
+          <SearchableSelect
             value={supermarketId}
-            onChange={(e) => {
-              setSupermarketId(e.target.value);
+            onChange={(value) => {
+              setSupermarketId(value);
               setBranchId("");
             }}
             disabled={supermarketLoading}
-          >
-            <option value="">
-              {supermarketLoading ? "Cargando..." : "Selecciona"}
-            </option>
-            {supermarkets.map((market) => (
-              <option key={market.SupermercadoId} value={market.SupermercadoId}>
-                {market.Nombre}
-              </option>
-            ))}
-          </select>
+            placeholder={supermarketLoading ? "Cargando..." : "Selecciona"}
+            options={supermarkets.map((market) => ({
+              value: String(market.SupermercadoId),
+              label: market.Nombre,
+            }))}
+          />
           {supermarketError && (
             <small style={{ color: "#b91c1c" }}>{supermarketError}</small>
           )}
@@ -529,24 +536,22 @@ export default function Form() {
 
         <label>
           Sucursal
-          <select
+          <SearchableSelect
             value={branchId}
-            onChange={(e) => setBranchId(e.target.value)}
+            onChange={setBranchId}
             disabled={branchLoading || !supermarketId}
-          >
-            <option value="">
-              {!supermarketId
+            placeholder={
+              !supermarketId
                 ? "Selecciona un supermercado"
                 : branchLoading
                   ? "Cargando..."
-                  : "Selecciona"}
-            </option>
-            {branches.map((branch) => (
-              <option key={branch.SucursalId} value={branch.SucursalId}>
-                {branch.NombreSucursal}
-              </option>
-            ))}
-          </select>
+                  : "Selecciona"
+            }
+            options={branches.map((branch) => ({
+              value: String(branch.SucursalId),
+              label: branch.NombreSucursal,
+            }))}
+          />
           {branchError && (
             <small style={{ color: "#b91c1c" }}>{branchError}</small>
           )}
@@ -689,9 +694,18 @@ export default function Form() {
           {cartItems.length === 0 ? (
             <p className="cart-empty">Aun no hay productos escaneados.</p>
           ) : (
-            <div className="cart-list">
+            <motion.div
+              className="cart-list"
+              variants={cartVariants}
+              initial="hidden"
+              animate="visible"
+            >
               {cartItems.map((item) => (
-                <div className="cart-item" key={item.id}>
+                <motion.div
+                  className="cart-item"
+                  key={item.id}
+                  variants={cartItemVariants}
+                >
                   <div className="cart-item-info">
                     <div className="cart-item-code">
                       {item.name ? item.name : item.code}
@@ -716,14 +730,14 @@ export default function Form() {
                       Quitar
                     </button>
                   </div>
-                </div>
+                </motion.div>
               ))}
 
               <div className="cart-summary">
                 <span>Total</span>
                 <span>${cartTotal.toFixed(2)}</span>
               </div>
-            </div>
+            </motion.div>
           )}
         </div>
 

@@ -1,7 +1,15 @@
+import { useEffect } from "react";
 import ScreenWrapper from "../components/ScreenWrapper";
 import { Link } from "react-router-dom";
 
 export default function Home() {
+  useEffect(() => {
+    document.body.classList.add("home-no-scroll");
+    return () => {
+      document.body.classList.remove("home-no-scroll");
+    };
+  }, []);
+
   return (
     <ScreenWrapper className="home-screen">
       <div className="home-modern">
@@ -19,34 +27,13 @@ export default function Home() {
             <Link to="/form" className="home-secondary">
               Nueva compra
             </Link>
+            <Link to="/ocr-boleta" className="home-secondary">
+              Analizar boleta
+            </Link>
           </div>
         </header>
 
         <section className="home-grid">
-          <Link
-            to="/scanner"
-            className="home-card home-card-accent home-card-link"
-          >
-            <h2>Escaneo rapido</h2>
-            <p>
-              Usa la camara o ingresa el codigo manualmente para identificar un
-              producto en segundos.
-            </p>
-            <span className="home-link">Ir al escaner</span>
-          </Link>
-
-          <Link
-            to="/form"
-            className="home-card home-card-accent home-card-link"
-          >
-            <h2>Registro ordenado</h2>
-            <p>
-              Guarda tus compras con fecha, cantidad y precio para tener todo
-              bajo control.
-            </p>
-            <span className="home-link">Crear registro</span>
-          </Link>
-
           <Link
             to="/products"
             className="home-card home-card-accent home-card-link"
@@ -87,3 +74,4 @@ export default function Home() {
     </ScreenWrapper>
   );
 }
+

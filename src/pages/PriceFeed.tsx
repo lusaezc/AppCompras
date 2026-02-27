@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { motion } from "framer-motion";
 import { Navigate } from "react-router-dom";
 import ScreenWrapper from "../components/ScreenWrapper";
 import { readAuthUser } from "../auth";
+import SearchableSelect from "../components/SearchableSelect";
 
 type PriceRecord = {
   RegistroPrecioId: number;
@@ -32,6 +34,16 @@ export default function PriceFeed() {
   const [query, setQuery] = useState("");
   const [submittedQuery, setSubmittedQuery] = useState("");
   const [supermarketFilter, setSupermarketFilter] = useState("all");
+  const listVariants = {
+    hidden: {},
+    visible: {
+      transition: { staggerChildren: 0.05, delayChildren: 0.03 },
+    },
+  };
+  const rowVariants = {
+    hidden: { opacity: 0, y: 8 },
+    visible: { opacity: 1, y: 0, transition: { duration: 0.22, ease: "easeOut" as const } },
+  };
 
   useEffect(() => {
     let active = true;
@@ -142,6 +154,7 @@ export default function PriceFeed() {
   return (
     <ScreenWrapper className="price-feed-page">
       <header className="price-feed-header">
+        <span className="products-modern-chip">Comunidad</span>
         <h1>Precios de la comunidad</h1>
         <p>
           Registros de precios aportados por todos los usuarios para comparar
@@ -164,17 +177,15 @@ export default function PriceFeed() {
 
         <label className="price-feed-filter">
           Supermercado
-          <select
+          <SearchableSelect
             value={supermarketFilter}
-            onChange={(event) => setSupermarketFilter(event.target.value)}
-          >
-            <option value="all">Todos</option>
-            {supermarkets.map((name) => (
-              <option key={name} value={name}>
-                {name}
-              </option>
-            ))}
-          </select>
+            onChange={(value) => setSupermarketFilter(value || "all")}
+            placeholder="Todos"
+            options={[
+              { value: "all", label: "Todos" },
+              ...supermarkets.map((name) => ({ value: name, label: name })),
+            ]}
+          />
         </label>
       </section>
 
@@ -197,17 +208,33 @@ export default function PriceFeed() {
         </article>
       </section>
 
-      {loading && <p>Cargando registros de precios...</p>}
+      {loading && (
+        <div className="app-modern-loading" role="status">
+          <span className="app-modern-spinner" />
+          <p>Cargando registros de precios...</p>
+        </div>
+      )}
       {error && <p className="purchase-error">{error}</p>}
 
       {!loading && !error && filteredRecords.length === 0 && (
-        <p>No se encontraron registros de precios para los filtros elegidos.</p>
+        <div className="app-modern-empty">
+          No se encontraron registros de precios para los filtros elegidos.
+        </div>
       )}
 
       {!loading && !error && filteredRecords.length > 0 && (
-        <section className="price-feed-list">
+        <motion.section
+          className="price-feed-list"
+          variants={listVariants}
+          initial="hidden"
+          animate="visible"
+        >
           {filteredRecords.map((row) => (
-            <article key={row.RegistroPrecioId} className="price-feed-row">
+            <motion.article
+              key={row.RegistroPrecioId}
+              className="price-feed-row"
+              variants={rowVariants}
+            >
               <div className="price-feed-row-top">
                 <strong>{row.NombreProducto || `Producto ${row.ProductoId}`}</strong>
                 <span>{formatMoney(Number(row.Precio))}</span>
@@ -226,9 +253,9 @@ export default function PriceFeed() {
               <div className="price-feed-row-user">
                 Reportado por: {row.NombreUsuario || `Usuario ${row.UserId}`}
               </div>
-            </article>
+            </motion.article>
           ))}
-        </section>
+        </motion.section>
       )}
     </ScreenWrapper>
   );

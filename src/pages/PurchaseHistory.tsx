@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
+import { motion } from "framer-motion";
 import ScreenWrapper from "../components/ScreenWrapper";
 import { readAuthUser } from "../auth";
+import useLockBodyScroll from "../hooks/useLockBodyScroll";
 
 type PurchaseRow = {
   CompraId: number;
@@ -41,6 +43,17 @@ export default function PurchaseHistory() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const listVariants = {
+    hidden: {},
+    visible: {
+      transition: { staggerChildren: 0.06, delayChildren: 0.04 },
+    },
+  };
+  const rowVariants = {
+    hidden: { opacity: 0, y: 10 },
+    visible: { opacity: 1, y: 0, transition: { duration: 0.22, ease: "easeOut" as const } },
+  };
+  useLockBodyScroll(isDetailOpen);
 
   useEffect(() => {
     let active = true;
@@ -198,6 +211,7 @@ export default function PurchaseHistory() {
   return (
     <ScreenWrapper className="purchase-history-page">
       <header className="purchase-history-header">
+        <span className="products-modern-chip">Mis compras</span>
         <h1>Historial de compras</h1>
         <p>
           {authUser?.Nombre
@@ -221,20 +235,30 @@ export default function PurchaseHistory() {
         </article>
       </section>
 
-      {loading && <p>Cargando compras...</p>}
+      {loading && (
+        <div className="app-modern-loading" role="status">
+          <span className="app-modern-spinner" />
+          <p>Cargando compras...</p>
+        </div>
+      )}
       {error && <p className="purchase-error">{error}</p>}
 
       {!loading && !error && purchases.length === 0 && (
-        <p>Aun no tienes compras registradas.</p>
+        <div className="app-modern-empty">Aun no tienes compras registradas.</div>
       )}
 
       {!loading && !error && purchases.length > 0 && (
         <section className="purchase-history-layout">
-          <div className="purchase-list">
+          <motion.div
+            className="purchase-list"
+            variants={listVariants}
+            initial="hidden"
+            animate="visible"
+          >
             {purchases.map((purchase) => {
               const isActive = purchase.CompraId === selectedPurchaseId;
               return (
-                <button
+                <motion.button
                   type="button"
                   key={purchase.CompraId}
                   onClick={() => {
@@ -243,6 +267,7 @@ export default function PurchaseHistory() {
                     setIsDetailOpen(true);
                   }}
                   className={`purchase-row ${isActive ? "active" : ""}`}
+                  variants={rowVariants}
                 >
                   <div className="purchase-row-top">
                     <strong>Compra #{purchase.CompraId}</strong>
@@ -256,10 +281,10 @@ export default function PurchaseHistory() {
                     {purchase.NombreSupermercado || "Sin supermercado"} ·{" "}
                     {purchase.NombreSucursal || `Sucursal ${purchase.SucursalId}`}
                   </div>
-                </button>
+                </motion.button>
               );
             })}
-          </div>
+          </motion.div>
         </section>
       )}
 
@@ -283,11 +308,18 @@ export default function PurchaseHistory() {
               </p>
             </div>
 
-            {detailLoading && <p>Cargando productos...</p>}
+            {detailLoading && (
+              <div className="app-modern-loading compact" role="status">
+                <span className="app-modern-spinner" />
+                <p>Cargando productos...</p>
+              </div>
+            )}
             {detailError && <p className="purchase-error">{detailError}</p>}
 
             {!detailLoading && !detailError && selectedItems.length === 0 && (
-              <p>Esta compra no tiene productos asociados.</p>
+              <div className="app-modern-empty compact">
+                Esta compra no tiene productos asociados.
+              </div>
             )}
 
             {!detailLoading && !detailError && selectedItems.length > 0 && (

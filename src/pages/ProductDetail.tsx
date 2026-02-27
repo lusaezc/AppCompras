@@ -2,6 +2,8 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useEffect, useState, type ChangeEvent } from "react";
 import type { Product } from "../types/product";
 import { motion } from "framer-motion";
+import useLockBodyScroll from "../hooks/useLockBodyScroll";
+import SearchableSelect from "../components/SearchableSelect";
 
 type PriceHistoryItem = {
   RegistroPrecioId: number;
@@ -15,6 +17,11 @@ type PriceHistoryItem = {
   NombreUsuario?: string | null;
 };
 
+type CatalogItem = {
+  id: number;
+  name: string;
+};
+
 export default function ProductDetail() {
   const { code } = useParams<{ code: string }>();
   const navigate = useNavigate();
@@ -24,8 +31,10 @@ export default function ProductDetail() {
   const [isEditing, setIsEditing] = useState(false);
   const [editCode, setEditCode] = useState("");
   const [editName, setEditName] = useState("");
-  const [editBrand, setEditBrand] = useState("");
-  const [editCategory, setEditCategory] = useState("");
+  const [editBrandId, setEditBrandId] = useState("");
+  const [editCategoryId, setEditCategoryId] = useState("");
+  const [brands, setBrands] = useState<CatalogItem[]>([]);
+  const [categories, setCategories] = useState<CatalogItem[]>([]);
   const [editImage, setEditImage] = useState<string | null>(null);
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
@@ -33,6 +42,56 @@ export default function ProductDetail() {
   const [history, setHistory] = useState<PriceHistoryItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
+  useLockBodyScroll(isEditing || showHistory);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadCatalogs = async () => {
+      const apiBase = import.meta.env.VITE_API_URL as string | undefined;
+      if (!apiBase) return;
+      try {
+        const [brandsRes, categoriesRes] = await Promise.all([
+          fetch(`${apiBase}/api/marcas`),
+          fetch(`${apiBase}/api/categorias`),
+        ]);
+
+        if (!brandsRes.ok || !categoriesRes.ok) return;
+
+        const brandsPayload = (await brandsRes.json()) as {
+          ok: boolean;
+          data?: Array<{ MarcaId: number; Nombre: string }>;
+        };
+
+        const categoriesPayload = (await categoriesRes.json()) as {
+          ok: boolean;
+          data?: Array<{ CategoriaId: number; Nombre: string }>;
+        };
+
+        if (!active || !brandsPayload.ok || !categoriesPayload.ok) return;
+
+        setBrands(
+          (brandsPayload.data ?? []).map((row) => ({
+            id: row.MarcaId,
+            name: row.Nombre,
+          })),
+        );
+        setCategories(
+          (categoriesPayload.data ?? []).map((row) => ({
+            id: row.CategoriaId,
+            name: row.Nombre,
+          })),
+        );
+      } catch {
+        // Silencioso para no bloquear la vista.
+      }
+    };
+
+    void loadCatalogs();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -221,8 +280,8 @@ export default function ProductDetail() {
     if (!product) return;
     setEditCode(product.code);
     setEditName(product.name);
-    setEditBrand(product.brand ?? "");
-    setEditCategory(product.category ?? "");
+    setEditBrandId(product.brandId ? String(product.brandId) : "");
+    setEditCategoryId(product.categoryId ? String(product.categoryId) : "");
     setEditImage(product.image ?? null);
     setEditError(null);
     setIsEditing(true);
@@ -247,6 +306,10 @@ export default function ProductDetail() {
       setEditError("Codigo y nombre son obligatorios");
       return;
     }
+    if (!editBrandId || !editCategoryId) {
+      setEditError("Selecciona marca y categoria");
+      return;
+    }
 
     const apiBase = import.meta.env.VITE_API_URL as string | undefined;
     if (!apiBase) {
@@ -261,8 +324,8 @@ export default function ProductDetail() {
       const payload = {
         CodigoBarra: editCode.trim(),
         NombreProducto: editName.trim(),
-        Marca: editBrand.trim() || null,
-        Categoria: editCategory.trim() || null,
+        MarcaId: Number(editBrandId),
+        CategoriaId: Number(editCategoryId),
         Imagen: editImage ?? null,
       };
 
@@ -284,9 +347,13 @@ export default function ProductDetail() {
         ...product,
         code: editCode.trim(),
         name: editName.trim(),
-        brand: editBrand.trim(),
-        category: editCategory.trim(),
-        description: editCategory.trim(),
+        brand: brands.find((row) => String(row.id) === editBrandId)?.name ?? "",
+        category:
+          categories.find((row) => String(row.id) === editCategoryId)?.name ?? "",
+        brandId: Number(editBrandId),
+        categoryId: Number(editCategoryId),
+        description:
+          categories.find((row) => String(row.id) === editCategoryId)?.name ?? "",
         image: editImage ?? undefined,
       });
       setIsEditing(false);
@@ -300,11 +367,47 @@ export default function ProductDetail() {
   };
 
   if (loading) {
-    return <p>Cargando producto...</p>;
+    return (
+      <motion.div className="screen product-detail-page">
+        <div className="product-detail-loading-card">
+          <div className="product-detail-loading-header">
+            <span className="product-detail-loading-chip">Cargando</span>
+            <h2>Buscando producto</h2>
+            <p>Consultando codigo escaneado y recuperando informacion.</p>
+          </div>
+          <div className="product-detail-loading-body">
+            <div className="product-detail-loading-media" />
+            <div className="product-detail-loading-lines">
+              <span />
+              <span />
+              <span />
+              <span />
+            </div>
+          </div>
+        </div>
+      </motion.div>
+    );
   }
 
   if (error || !product) {
-    return <p>{error || "Producto no encontrado"}</p>;
+    return (
+      <motion.div className="screen product-detail-page">
+        <div className="product-detail-loading-card">
+          <div className="product-detail-loading-header">
+            <span className="product-detail-loading-chip error">Atencion</span>
+            <h2>No pudimos cargar el producto</h2>
+            <p>{error || "Producto no encontrado"}</p>
+          </div>
+          <button
+            type="button"
+            className="product-detail-action-button primary"
+            onClick={() => navigate(-1)}
+          >
+            Volver
+          </button>
+        </div>
+      </motion.div>
+    );
   }
 
   const latestPrice = history.length > 0 ? history[0] : null;
@@ -444,8 +547,8 @@ export default function ProductDetail() {
               <label>Codigo de barras</label>
               <input
                 value={editCode}
-                readOnly
-                disabled
+                onChange={(e) => setEditCode(e.target.value)}
+                disabled={editLoading}
               />
             </div>
 
@@ -460,19 +563,29 @@ export default function ProductDetail() {
 
             <div className="form-group">
               <label>Marca</label>
-              <input
-                value={editBrand}
-                onChange={(e) => setEditBrand(e.target.value)}
+              <SearchableSelect
+                value={editBrandId}
+                onChange={setEditBrandId}
                 disabled={editLoading}
+                placeholder="Selecciona marca"
+                options={brands.map((row) => ({
+                  value: String(row.id),
+                  label: row.name,
+                }))}
               />
             </div>
 
             <div className="form-group">
               <label>Categoria</label>
-              <input
-                value={editCategory}
-                onChange={(e) => setEditCategory(e.target.value)}
+              <SearchableSelect
+                value={editCategoryId}
+                onChange={setEditCategoryId}
                 disabled={editLoading}
+                placeholder="Selecciona categoria"
+                options={categories.map((row) => ({
+                  value: String(row.id),
+                  label: row.name,
+                }))}
               />
             </div>
 
@@ -481,7 +594,6 @@ export default function ProductDetail() {
               <input
                 type="file"
                 accept="image/*"
-                capture="environment"
                 onChange={handleEditImage}
                 disabled={editLoading}
               />

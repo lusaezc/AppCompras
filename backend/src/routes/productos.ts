@@ -4,45 +4,64 @@ import { poolPromise } from "../db";
 
 const router = Router();
 
+type ProductRow = {
+  ProductoId: number;
+  CodigoBarra: string;
+  NombreProducto: string;
+  Marca?: string | null;
+  Categoria?: string | null;
+  MarcaId?: number | null;
+  CategoriaId?: number | null;
+  Imagen?: Buffer | null;
+};
+
+const mapProductRow = (row: ProductRow) => {
+  const imageBuffer = row.Imagen as Buffer | null | undefined;
+  const base64 = imageBuffer ? imageBuffer.toString("base64") : null;
+  return {
+    id: String(row.ProductoId),
+    code: row.CodigoBarra,
+    name: row.NombreProducto,
+    description: row.Categoria ?? "",
+    brand: row.Marca ?? "",
+    category: row.Categoria ?? "",
+    brandId: row.MarcaId ?? null,
+    categoryId: row.CategoriaId ?? null,
+    image: base64 ? `data:image/*;base64,${base64}` : undefined,
+    createdAt: "",
+  };
+};
+
 router.get("/", async (_req: Request, res: Response) => {
   try {
     const pool = await poolPromise;
 
     const result = await pool.request().query(`
       SELECT
-        ProductoId,
-        CodigoBarra,
-        NombreProducto,
-        Marca,
-        Categoria,
-        Imagen,
-        Activo
-      FROM [dbo].[Producto]
-      WHERE Activo = 1
-      ORDER BY NombreProducto ASC
+        p.ProductoId,
+        p.CodigoBarra,
+        p.NombreProducto,
+        p.MarcaId,
+        p.CategoriaId,
+        m.Nombre AS Marca,
+        c.Nombre AS Categoria,
+        p.Imagen,
+        p.Activo
+      FROM [dbo].[Producto] p
+      LEFT JOIN [dbo].[Marcas] m
+        ON m.MarcaId = p.MarcaId
+      LEFT JOIN [dbo].[Categorias] c
+        ON c.CategoriaId = p.CategoriaId
+      WHERE p.Activo = 1
+      ORDER BY p.NombreProducto ASC
     `);
-
-    const products = result.recordset.map((row) => {
-      const imageBuffer = row.Imagen as Buffer | null | undefined;
-      const base64 = imageBuffer ? imageBuffer.toString("base64") : null;
-      return {
-        id: String(row.ProductoId),
-        code: row.CodigoBarra,
-        name: row.NombreProducto,
-        description: row.Categoria ?? "",
-        brand: row.Marca ?? "",
-        category: row.Categoria ?? "",
-        image: base64 ? `data:image/*;base64,${base64}` : undefined,
-        createdAt: "",
-      };
-    });
 
     res.json({
       ok: true,
-      data: products,
+      data: result.recordset.map(mapProductRow),
     });
   } catch (error) {
-    console.error("❌ Error consultando productos:", error);
+    console.error("Error consultando productos:", error);
     res.status(500).json({
       ok: false,
       message: "Error consultando productos",
@@ -66,15 +85,21 @@ router.get("/codigo/:code", async (req: Request, res: Response) => {
       .input("CodigoBarra", sql.NVarChar(50), rawCode)
       .query(`
         SELECT TOP 1
-          ProductoId,
-          CodigoBarra,
-          NombreProducto,
-          Marca,
-          Categoria,
-          Imagen,
-          Activo
-        FROM [dbo].[Producto]
-        WHERE CodigoBarra = @CodigoBarra
+          p.ProductoId,
+          p.CodigoBarra,
+          p.NombreProducto,
+          p.MarcaId,
+          p.CategoriaId,
+          m.Nombre AS Marca,
+          c.Nombre AS Categoria,
+          p.Imagen,
+          p.Activo
+        FROM [dbo].[Producto] p
+        LEFT JOIN [dbo].[Marcas] m
+          ON m.MarcaId = p.MarcaId
+        LEFT JOIN [dbo].[Categorias] c
+          ON c.CategoriaId = p.CategoriaId
+        WHERE p.CodigoBarra = @CodigoBarra
       `);
 
     if (!result.recordset?.length) {
@@ -84,26 +109,12 @@ router.get("/codigo/:code", async (req: Request, res: Response) => {
       });
     }
 
-    const row = result.recordset[0];
-    const imageBuffer = row.Imagen as Buffer | null | undefined;
-    const base64 = imageBuffer ? imageBuffer.toString("base64") : null;
-    const product = {
-      id: String(row.ProductoId),
-      code: row.CodigoBarra,
-      name: row.NombreProducto,
-      description: row.Categoria ?? "",
-      brand: row.Marca ?? "",
-      category: row.Categoria ?? "",
-      image: base64 ? `data:image/*;base64,${base64}` : undefined,
-      createdAt: "",
-    };
-
     res.json({
       ok: true,
-      data: product,
+      data: mapProductRow(result.recordset[0] as ProductRow),
     });
   } catch (error) {
-    console.error("❌ Error consultando producto:", error);
+    console.error("Error consultando producto:", error);
     res.status(500).json({
       ok: false,
       message: "Error consultando producto",
@@ -150,7 +161,7 @@ router.get("/:id/historial-precios", async (req: Request, res: Response) => {
       data: result.recordset,
     });
   } catch (error) {
-    console.error("❌ Error consultando historial de precios:", error);
+    console.error("Error consultando historial de precios:", error);
     res.status(500).json({
       ok: false,
       message: "Error consultando historial de precios",
@@ -171,26 +182,26 @@ router.put("/:id", async (req: Request, res: Response) => {
     const {
       CodigoBarra,
       NombreProducto,
-      Marca,
-      Categoria,
+      MarcaId,
+      CategoriaId,
       Imagen,
       code,
       name,
-      brand,
-      category,
+      brandId,
+      categoryId,
       image,
     } = req.body;
 
     const codigo = CodigoBarra ?? code;
     const nombre = NombreProducto ?? name;
-    const marca = Marca ?? brand ?? null;
-    const categoria = Categoria ?? category ?? null;
+    const marcaId = Number(MarcaId ?? brandId);
+    const categoriaId = Number(CategoriaId ?? categoryId);
     const imagenRaw = Imagen ?? image ?? null;
 
-    if (!codigo || !nombre) {
+    if (!codigo || !nombre || !Number.isInteger(marcaId) || !Number.isInteger(categoriaId)) {
       return res.status(400).json({
         ok: false,
-        message: "CodigoBarra y NombreProducto son obligatorios",
+        message: "CodigoBarra, NombreProducto, MarcaId y CategoriaId son obligatorios",
       });
     }
 
@@ -212,16 +223,16 @@ router.put("/:id", async (req: Request, res: Response) => {
       .input("ProductoId", sql.Int, productoId)
       .input("CodigoBarra", sql.NVarChar(50), codigo)
       .input("NombreProducto", sql.NVarChar(150), nombre)
-      .input("Marca", sql.NVarChar(100), marca)
-      .input("Categoria", sql.NVarChar(100), categoria)
+      .input("MarcaId", sql.Int, marcaId)
+      .input("CategoriaId", sql.Int, categoriaId)
       .input("Imagen", sql.VarBinary(sql.MAX), imagenBuffer)
       .query(`
         UPDATE [dbo].[Producto]
         SET
           CodigoBarra = @CodigoBarra,
           NombreProducto = @NombreProducto,
-          Marca = @Marca,
-          Categoria = @Categoria,
+          MarcaId = @MarcaId,
+          CategoriaId = @CategoriaId,
           Imagen = @Imagen
         WHERE ProductoId = @ProductoId
       `);
@@ -238,7 +249,7 @@ router.put("/:id", async (req: Request, res: Response) => {
       message: "Producto actualizado",
     });
   } catch (error) {
-    console.error("❌ Error actualizando producto:", error);
+    console.error("Error actualizando producto:", error);
     const sqlError = error as { number?: number; code?: string } | null;
     const isDuplicate =
       sqlError?.number === 2627 ||
@@ -289,7 +300,7 @@ router.delete("/:id", async (req: Request, res: Response) => {
       message: "Producto eliminado",
     });
   } catch (error) {
-    console.error("❌ Error eliminando producto:", error);
+    console.error("Error eliminando producto:", error);
     res.status(500).json({
       ok: false,
       message: "Error eliminando producto",
@@ -302,19 +313,20 @@ router.post("/", async (req: Request, res: Response) => {
     const {
       CodigoBarra,
       NombreProducto,
-      Marca,
-      Categoria,
+      MarcaId,
+      CategoriaId,
       Imagen,
       code,
       name,
-      description,
+      brandId,
+      categoryId,
       image,
     } = req.body;
 
     const codigo = CodigoBarra ?? code;
     const nombre = NombreProducto ?? name;
-    const marca = Marca ?? null;
-    const categoria = Categoria ?? description ?? null;
+    const marcaId = Number(MarcaId ?? brandId);
+    const categoriaId = Number(CategoriaId ?? categoryId);
     const activo = true;
 
     let imagenBuffer: Buffer | null = null;
@@ -330,11 +342,10 @@ router.post("/", async (req: Request, res: Response) => {
       }
     }
 
-    // Validaciones mínimas
-    if (!codigo || !nombre || activo === undefined) {
+    if (!codigo || !nombre || !Number.isInteger(marcaId) || !Number.isInteger(categoriaId)) {
       return res.status(400).json({
         ok: false,
-        message: "CodigoBarra, NombreProducto y Activo son obligatorios",
+        message: "CodigoBarra, NombreProducto, MarcaId y CategoriaId son obligatorios",
       });
     }
 
@@ -344,14 +355,14 @@ router.post("/", async (req: Request, res: Response) => {
       .request()
       .input("CodigoBarra", sql.NVarChar(50), codigo)
       .input("NombreProducto", sql.NVarChar(150), nombre)
-      .input("Marca", sql.NVarChar(100), marca)
-      .input("Categoria", sql.NVarChar(100), categoria)
+      .input("MarcaId", sql.Int, marcaId)
+      .input("CategoriaId", sql.Int, categoriaId)
       .input("Imagen", sql.VarBinary(sql.MAX), imagenBuffer)
       .input("Activo", sql.Bit, activo).query(`
-        INSERT INTO Producto
-        (CodigoBarra, NombreProducto, Marca, Categoria, Imagen, Activo)
+        INSERT INTO [dbo].[Producto]
+        (CodigoBarra, NombreProducto, Imagen, Activo, CategoriaId, MarcaId)
         VALUES
-        (@CodigoBarra, @NombreProducto, @Marca, @Categoria, @Imagen, @Activo)
+        (@CodigoBarra, @NombreProducto, @Imagen, @Activo, @CategoriaId, @MarcaId)
       `);
 
     res.json({
@@ -359,7 +370,7 @@ router.post("/", async (req: Request, res: Response) => {
       message: "Producto insertado correctamente",
     });
   } catch (error) {
-    console.error("❌ Error insertando producto:", error);
+    console.error("Error insertando producto:", error);
     const sqlError = error as { number?: number; code?: string } | null;
     const isDuplicate =
       sqlError?.number === 2627 ||
@@ -379,4 +390,3 @@ router.post("/", async (req: Request, res: Response) => {
 });
 
 export default router;
-
