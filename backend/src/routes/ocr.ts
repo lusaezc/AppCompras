@@ -90,16 +90,14 @@ const createAzureOcrClient = (): AzureOcrClient => {
       endpointUrl: string,
       options: { key: string },
     ) => AzureOcrClient;
-    const {
-      getLongRunningPoller,
-      isUnexpected,
-    } = require("@azure-rest/ai-document-intelligence") as {
-      getLongRunningPoller: (
-        client: AzureOcrClient,
-        response: unknown,
-      ) => AnalyzePoller;
-      isUnexpected: (response: unknown) => boolean;
-    };
+    const { getLongRunningPoller, isUnexpected } =
+      require("@azure-rest/ai-document-intelligence") as {
+        getLongRunningPoller: (
+          client: AzureOcrClient,
+          response: unknown,
+        ) => AnalyzePoller;
+        isUnexpected: (response: unknown) => boolean;
+      };
 
     const client = DocumentIntelligence(endpoint, { key: apiKey });
 
@@ -137,6 +135,7 @@ const extractBarcodeCandidates = (lines: string[]) => {
 };
 
 type FallbackReceiptItem = {
+  code: string | null;
   name: string;
   quantity: number | null;
   price: null;
@@ -149,18 +148,21 @@ type FallbackReceiptItem = {
 };
 
 const parseAmountFromLine = (line: string) => {
-  const match = line.match(/([$€£])?\s*(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})|\d+)/);
+  const match = line.match(
+    /([$€£])?\s*(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})|\d+)/,
+  );
   if (!match) {
     return null;
   }
 
   const symbol = String(match[1] ?? "").trim() || null;
   const raw = String(match[2] ?? "").trim();
-  const normalized = raw.includes(",") && raw.includes(".")
-    ? raw.replace(/\./g, "").replace(",", ".")
-    : raw.includes(",")
-      ? raw.replace(",", ".")
-      : raw;
+  const normalized =
+    raw.includes(",") && raw.includes(".")
+      ? raw.replace(/\./g, "").replace(",", ".")
+      : raw.includes(",")
+        ? raw.replace(",", ".")
+        : raw;
   const amount = Number(normalized);
 
   if (!Number.isFinite(amount)) {
@@ -230,6 +232,7 @@ const buildReceiptItemsFromLines = (lines: string[]): FallbackReceiptItem[] => {
     if (matchCodeAndText) {
       flush();
       current = {
+        code: String(matchCodeAndText[1] ?? "").trim() || null,
         name: String(matchCodeAndText[2] ?? "").trim(),
         quantity: null,
         price: null,
@@ -241,6 +244,7 @@ const buildReceiptItemsFromLines = (lines: string[]): FallbackReceiptItem[] => {
     if (reOnlyCode.test(line)) {
       flush();
       current = {
+        code: line,
         name: "",
         quantity: null,
         price: null,
@@ -251,6 +255,7 @@ const buildReceiptItemsFromLines = (lines: string[]): FallbackReceiptItem[] => {
 
     if (!current) {
       current = {
+        code: null,
         name: line,
         quantity: null,
         price: null,
@@ -304,6 +309,7 @@ const getObjectField = (
 
 const mapReceiptItem = (field: DocumentField) => {
   const item = field.valueObject ?? {};
+  const codeField = getObjectField(item, ["ProductCode", "Code", "Barcode"]);
   const descriptionField = getObjectField(item, [
     "Description",
     "Name",
@@ -313,9 +319,12 @@ const mapReceiptItem = (field: DocumentField) => {
   const quantityField = getObjectField(item, ["Quantity", "Count"]);
   const priceField = getObjectField(item, ["Price", "UnitPrice"]);
   const totalPriceField = getObjectField(item, ["TotalPrice", "Amount"]);
-  const fallbackName = String(field.content ?? "").replace(/\s+/g, " ").trim();
+  const fallbackName = String(field.content ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
 
   return {
+    code: getFieldText(codeField) || null,
     description: getFieldText(descriptionField) || fallbackName || null,
     descriptionConfidence: descriptionField?.confidence ?? null,
     quantity: getFieldNumber(quantityField),
@@ -428,6 +437,7 @@ router.post("/read", async (req, res) => {
             item.totalPrice !== null,
         )
         .map((item) => ({
+          code: item.code ?? null,
           name: item.description,
           quantity: item.quantity,
           price: item.price,
@@ -444,7 +454,8 @@ router.post("/read", async (req, res) => {
         lines,
         barcodeCandidates,
         receipts,
-        receiptItems: receiptItems.length > 0 ? receiptItems : fallbackReceiptItems,
+        receiptItems:
+          receiptItems.length > 0 ? receiptItems : fallbackReceiptItems,
       },
     });
   } catch (error) {

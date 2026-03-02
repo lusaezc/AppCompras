@@ -10,6 +10,7 @@ type ReceiptCurrency = {
 };
 
 type ReceiptItem = {
+  code?: string | null;
   name?: string | null;
   quantity?: number | null;
   price?: ReceiptCurrency | null;
@@ -256,6 +257,7 @@ export default function ReceiptOcr() {
               <table className="ocr-table">
                 <thead>
                   <tr>
+                    <th>Codigo</th>
                     <th>Articulo</th>
                     <th>Cantidad</th>
                     <th>Precio</th>
@@ -264,7 +266,8 @@ export default function ReceiptOcr() {
                 </thead>
                 <tbody>
                   {receiptItems.map((item, index) => (
-                    <tr key={`${item.name ?? "articulo"}-${index}`}>
+                    <tr key={`${item.code ?? "sin-codigo"}-${item.name ?? "articulo"}-${index}`}>
+                      <td>{String(item.code ?? "").trim() || "-"}</td>
                       <td>{String(item.name ?? "").trim() || "-"}</td>
                       <td>
                         {typeof item.quantity === "number" ? item.quantity : "-"}
