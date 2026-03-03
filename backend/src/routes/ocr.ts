@@ -354,6 +354,9 @@ const mapReceiptDocument = (receipt: ReceiptDocument) => {
     },
     items,
     subtotal: getFieldCurrency(fields.Subtotal),
+    discount:
+      getFieldCurrency(fields.TotalDiscount) ??
+      getFieldCurrency(fields.Discount),
     tax: getFieldCurrency(fields.TotalTax),
     tip: getFieldCurrency(fields.Tip),
     total: getFieldCurrency(fields.Total),
@@ -446,6 +449,7 @@ router.post("/read", async (req, res) => {
     );
     const fallbackReceiptItems =
       receiptItems.length > 0 ? [] : buildReceiptItemsFromLines(lines);
+    const primaryReceipt = receipts[0] ?? null;
 
     return res.json({
       ok: true,
@@ -456,6 +460,13 @@ router.post("/read", async (req, res) => {
         receipts,
         receiptItems:
           receiptItems.length > 0 ? receiptItems : fallbackReceiptItems,
+        summary: primaryReceipt
+          ? {
+              discount: primaryReceipt.discount,
+              tax: primaryReceipt.tax,
+              total: primaryReceipt.total,
+            }
+          : null,
       },
     });
   } catch (error) {

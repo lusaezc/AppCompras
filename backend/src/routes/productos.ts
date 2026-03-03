@@ -71,7 +71,7 @@ router.get("/", async (_req: Request, res: Response) => {
 
 router.get("/codigo/:code", async (req: Request, res: Response) => {
   try {
-    const rawCode = req.params.code;
+    const rawCode = String(req.params.code ?? "").trim();
     if (!rawCode) {
       return res.status(400).json({
         ok: false,
@@ -80,29 +80,55 @@ router.get("/codigo/:code", async (req: Request, res: Response) => {
     }
 
     const pool = await poolPromise;
-    const result = await pool
+    const selectProductByCode = `
+      SELECT TOP 1
+        p.ProductoId,
+        p.CodigoBarra,
+        p.NombreProducto,
+        p.MarcaId,
+        p.CategoriaId,
+        m.Nombre AS Marca,
+        c.Nombre AS Categoria,
+        p.Imagen,
+        p.Activo
+      FROM [dbo].[Producto] p
+      LEFT JOIN [dbo].[Marcas] m
+        ON m.MarcaId = p.MarcaId
+      LEFT JOIN [dbo].[Categorias] c
+        ON c.CategoriaId = p.CategoriaId
+    `;
+
+    const exactResult = await pool
       .request()
       .input("CodigoBarra", sql.NVarChar(50), rawCode)
       .query(`
-        SELECT TOP 1
-          p.ProductoId,
-          p.CodigoBarra,
-          p.NombreProducto,
-          p.MarcaId,
-          p.CategoriaId,
-          m.Nombre AS Marca,
-          c.Nombre AS Categoria,
-          p.Imagen,
-          p.Activo
-        FROM [dbo].[Producto] p
-        LEFT JOIN [dbo].[Marcas] m
-          ON m.MarcaId = p.MarcaId
-        LEFT JOIN [dbo].[Categorias] c
-          ON c.CategoriaId = p.CategoriaId
+        ${selectProductByCode}
         WHERE p.CodigoBarra = @CodigoBarra
       `);
 
-    if (!result.recordset?.length) {
+    let productRow = exactResult.recordset?.[0] as ProductRow | undefined;
+
+    if (!productRow) {
+      const fragmentResult = await pool
+        .request()
+        .input("CodigoFragmento", sql.NVarChar(50), rawCode)
+        .query(`
+          ${selectProductByCode}
+          WHERE p.CodigoBarra LIKE '%' + @CodigoFragmento + '%'
+          ORDER BY
+            CASE
+              WHEN RIGHT(p.CodigoBarra, LEN(@CodigoFragmento)) = @CodigoFragmento
+                THEN 0
+              ELSE 1
+            END,
+            LEN(p.CodigoBarra) ASC,
+            p.ProductoId ASC
+        `);
+
+      productRow = fragmentResult.recordset?.[0] as ProductRow | undefined;
+    }
+
+    if (!productRow) {
       return res.status(404).json({
         ok: false,
         message: "Producto no encontrado",
@@ -111,7 +137,7 @@ router.get("/codigo/:code", async (req: Request, res: Response) => {
 
     res.json({
       ok: true,
-      data: mapProductRow(result.recordset[0] as ProductRow),
+      data: mapProductRow(productRow),
     });
   } catch (error) {
     console.error("Error consultando producto:", error);
